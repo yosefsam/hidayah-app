@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import { Home, BookOpen, BarChart3, User, Lock, Crown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
@@ -19,9 +20,15 @@ const hideNavPaths = ["/onboarding", "/onboarding/complete"];
 export function AppNav() {
   const pathname = usePathname();
   const proStatus = useAppStore((s) => s.proStatus);
-  if (hideNavPaths.some((p) => pathname.startsWith(p))) return null;
-
   const tier = proStatus === "pro" ? "pro" : proStatus === "free" ? "free" : "unknown";
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      console.log("[UI] AppNav tier from store", { proStatus, tier });
+    }
+  }, [proStatus, tier]);
+
+  if (hideNavPaths.some((p) => pathname.startsWith(p))) return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur md:relative md:border-0">

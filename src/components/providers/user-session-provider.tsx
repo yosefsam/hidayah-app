@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { coerceProfileIsFree, coerceProfileIsPro } from "@/lib/subscription/coerceProfileIsPro";
 import { resolveUserDisplayName } from "@/lib/user-display";
 import { useAppStore } from "@/store/useAppStore";
 import type { Bookmark, ReaderPreferences, ReadingSession, Streak } from "@/types";
@@ -115,16 +116,31 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
     if (loadedForUser.current === persistedAuthUserId) return;
     let cancelled = false;
     (async () => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) return;
+      // Do not gate on getSession(): it can be empty right after sign-in while httpOnly cookies
+      // still authenticate GET /api/reading-state — skipping here left proStatus stale forever (effect
+      // deps would not re-run).
       const res = await fetch("/api/reading-state", { credentials: "include" });
-      if (!res.ok || cancelled) return;
+      if (res.status === 401 || !res.ok || cancelled) return;
       const row = await res.json();
       if (!row || row.error || cancelled) return;
+      if (process.env.NODE_ENV === "development") {
+        console.log("[STORE] reading-state response", {
+          subscription: row.subscription,
+          nextPro: coerceProfileIsPro(row.subscription?.isPro)
+            ? "pro"
+            : coerceProfileIsFree(row.subscription?.isPro)
+              ? "free"
+              : "unchanged",
+        });
+      }
       if (Array.isArray(row.visited_pages)) setVisitedPages(row.visited_pages);
       if (Array.isArray(row.completed_pages)) setCompletedPages(row.completed_pages);
-      if (row.subscription?.isPro === true) setProStatus("pro");
-      else if (row.subscription?.isPro === false) setProStatus("free");
+      const isProVal = row.subscription?.isPro;
+      if (coerceProfileIsPro(isProVal)) setProStatus("pro");
+      else if (coerceProfileIsFree(isProVal)) setProStatus("free");
+      if (process.env.NODE_ENV === "development") {
+        console.log("[STORE] proStatus after apply", { proStatus: useAppStore.getState().proStatus });
+      }
       if (row.last_read_page && typeof row.last_read_page === "number") {
         setLastReadPosition({
           userId: persistedAuthUserId,
@@ -173,9 +189,10 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
     const refreshPro = async () => {
       const res = await fetch("/api/reading-state", { credentials: "include" });
       if (!res.ok) return;
-      const row = (await res.json()) as { subscription?: { isPro?: boolean } };
-      if (row.subscription?.isPro === true) setProStatus("pro");
-      else if (row.subscription?.isPro === false) setProStatus("free");
+      const row = (await res.json()) as { subscription?: { isPro?: unknown } };
+      const v = row.subscription?.isPro;
+      if (coerceProfileIsPro(v)) setProStatus("pro");
+      else if (coerceProfileIsFree(v)) setProStatus("free");
     };
     const onVis = () => {
       if (document.visibilityState === "visible") void refreshPro();

@@ -15,6 +15,7 @@ import { User, Target, Bell, Palette, LogOut, BookOpen, CreditCard } from "lucid
 import { useEffect, useMemo, useState } from "react";
 import { HidayahLogo } from "@/components/brand/hidayah-logo";
 import { ResetReadingProgressDialog } from "@/components/reset-reading-progress-dialog";
+import { coerceProfileIsPro } from "@/lib/subscription/coerceProfileIsPro";
 import { SubscriptionTierBadge } from "@/components/subscription/subscription-tier-badge";
 
 const unitLabel: Record<string, string> = { pages: "Pages", ayahs: "Verses", minutes: "Minutes", surahs: "Surahs" };
@@ -53,7 +54,7 @@ export default function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       const { data } = await supabase.from("profiles").select("is_pro").eq("id", user.id).maybeSingle();
-      setSubscriptionTier(data?.is_pro === true ? "premium" : "free");
+      setSubscriptionTier(coerceProfileIsPro(data?.is_pro) ? "premium" : "free");
     })();
   }, [supabase]);
 
@@ -64,8 +65,8 @@ export default function ProfilePage() {
     const id = window.setInterval(async () => {
       n += 1;
       const res = await fetch("/api/reading-state", { credentials: "include" });
-      const row = (await res.json().catch(() => ({}))) as { subscription?: { isPro?: boolean } };
-      if (row.subscription?.isPro === true) {
+      const row = (await res.json().catch(() => ({}))) as { subscription?: { isPro?: unknown } };
+      if (coerceProfileIsPro(row.subscription?.isPro)) {
         setProStatus("pro");
         setSubscriptionTier("premium");
         setConfirmingPro(false);

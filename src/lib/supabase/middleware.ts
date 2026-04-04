@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { DEMO_COOKIE_NAME } from "@/lib/demo-cookie";
 import { isLikelySupabaseProjectMismatch, resolveSupabasePublicEnv } from "@/lib/supabase/env";
 import { getFreeDailyReaderLimit } from "@/lib/subscription/freeTierLimits";
+import { coerceProfileIsPro } from "@/lib/subscription/coerceProfileIsPro";
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -117,7 +118,7 @@ export async function updateSession(request: NextRequest) {
       .select("is_pro")
       .eq("id", user.id)
       .maybeSingle();
-    const isPro = prof?.is_pro === true;
+    const isPro = coerceProfileIsPro(prof?.is_pro);
 
     if (!isPro) {
       const pricing = new URL("/pricing", request.url);
@@ -165,7 +166,7 @@ export async function updateSession(request: NextRequest) {
       .select("is_pro")
       .eq("id", user.id)
       .maybeSingle();
-    const isPro = prof?.is_pro === true;
+    const isPro = coerceProfileIsPro(prof?.is_pro);
 
     if (!isPro) {
       const today = new Date().toISOString().slice(0, 10);

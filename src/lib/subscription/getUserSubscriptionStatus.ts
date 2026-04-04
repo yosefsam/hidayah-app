@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { coerceProfileIsPro } from "@/lib/subscription/coerceProfileIsPro";
 
 export type UserSubscriptionStatus = {
   isPro: boolean;
@@ -22,9 +23,21 @@ export async function getUserSubscriptionStatusWithClient(
     .maybeSingle();
   if (profErr) throw profErr;
 
+  const rawIsPro = prof?.is_pro;
+  const isPro = coerceProfileIsPro(rawIsPro);
   const currentPeriodEnd = prof?.current_period_end ?? null;
+
+  if (process.env.NODE_ENV === "development") {
+    console.log("[DB] getUserSubscriptionStatusWithClient", {
+      userId,
+      rawProfile: prof,
+      rawIsPro,
+      computedIsPro: isPro,
+    });
+  }
+
   return {
-    isPro: prof?.is_pro === true,
+    isPro,
     status: (prof?.subscription_status ?? null) as string | null,
     currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd).toISOString() : null,
   };
@@ -46,9 +59,11 @@ export async function getUserSubscriptionStatus(userId: string): Promise<UserSub
     .maybeSingle();
   if (profErr) throw profErr;
 
+  const rawIsPro = prof?.is_pro;
+  const isPro = coerceProfileIsPro(rawIsPro);
   const currentPeriodEnd = prof?.current_period_end ?? null;
   return {
-    isPro: prof?.is_pro === true,
+    isPro,
     status: (prof?.subscription_status ?? null) as string | null,
     currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd).toISOString() : null,
   };

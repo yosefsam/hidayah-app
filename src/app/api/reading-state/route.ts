@@ -20,6 +20,14 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const subscription = await getUserSubscriptionStatusWithClient(supabase, user.id);
 
+  if (process.env.NODE_ENV === "development") {
+    console.log("[API] GET /api/reading-state", {
+      userId: user.id,
+      email: user.email,
+      subscription,
+    });
+  }
+
   const limit = getFreeDailyReaderLimit();
   const today = new Date().toISOString().slice(0, 10);
   let freeUsage: { used: number; limit: number } | null = null;
