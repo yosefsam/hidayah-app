@@ -1,9 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { DEMO_COOKIE_NAME } from "@/lib/demo-cookie";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { isLikelySupabaseProjectMismatch, resolveSupabasePublicEnv } from "@/lib/supabase/env";
 import { getFreeDailyReaderLimit } from "@/lib/subscription/freeTierLimits";
 import { coerceProfileIsPro } from "@/lib/subscription/coerceProfileIsPro";
+
+/** Pro gate reads `profiles` with service role to avoid RLS hiding `is_pro` for the anon JWT client. */
+async function fetchProfileIsProRow(userId: string, userScoped: SupabaseClient) {
+  const admin = createAdminClient();
+  return await (admin ?? userScoped).from("profiles").select("is_pro").eq("id", userId).maybeSingle();
+}
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -129,11 +137,14 @@ export async function updateSession(request: NextRequest) {
 
   // Pro-only route gate: `profiles.is_pro` (updated by Stripe webhook).
   if (isProOnlyPath(pathname) && user && !demo) {
-    const { data: prof, error: profErr } = await supabase
-      .from("profiles")
-      .select("is_pro")
-      .eq("id", user.id)
-      .maybeSingle();
+    const { data: prof, error: profErr } = await fetchProfileIsProRow(user.id, supabase);
+    if (middlewareDebug) {
+      console.log("[MIDDLEWARE] profiles query (pro-only gate)", {
+        userId: user.id,
+        profile: prof,
+        error: profErr?.message ?? null,
+      });
+    }
     const isPro = coerceProfileIsPro(prof?.is_pro);
 
     if (middlewareDebug) {
@@ -192,11 +203,14 @@ export async function updateSession(request: NextRequest) {
   // This ties usage limits to authenticated user IDs and cannot be bypassed
   // by changing client-only local state.
   if (isFreeLimitedPath(pathname) && user && !demo && request.method === "GET" && !prefetch) {
-    const { data: prof, error: profErr } = await supabase
-      .from("profiles")
-      .select("is_pro")
-      .eq("id", user.id)
-      .maybeSingle();
+    const { data: prof, error: profErr } = await fetchProfileIsProRow(user.id, supabase);
+    if (middlewareDebug) {
+      console.log("[MIDDLEWARE] profiles query (free-tier gate)", {
+        userId: user.id,
+        profile: prof,
+        error: profErr?.message ?? null,
+      });
+    }
     const isPro = coerceProfileIsPro(prof?.is_pro);
 
     if (middlewareDebug) {
