@@ -86,6 +86,11 @@ function isPrefetchRequest(request: NextRequest): boolean {
 }
 
 export async function updateSession(request: NextRequest) {
+  console.log("[MIDDLEWARE] env check", {
+    hasUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    hasServiceKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  });
+
   let supabaseResponse = NextResponse.next({ request });
 
   const { url, publicKey: key } = resolveSupabasePublicEnv();
