@@ -45,18 +45,7 @@ export default function ProfilePage() {
   const setProStatus = useAppStore((s) => s.setProStatus);
   const authDisplayName = useAppStore((s) => s.authDisplayName);
   const authEmail = useAppStore((s) => s.authEmail);
-  const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
   const [confirmingPro, setConfirmingPro] = useState(false);
-
-  useEffect(() => {
-    if (!supabase) return;
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase.from("profiles").select("is_pro").eq("id", user.id).maybeSingle();
-      setSubscriptionTier(coerceProfileIsPro(data?.is_pro) ? "premium" : "free");
-    })();
-  }, [supabase]);
 
   useEffect(() => {
     if (searchParams.get("subscription") !== "success") return;
@@ -68,7 +57,6 @@ export default function ProfilePage() {
       const row = (await res.json().catch(() => ({}))) as { subscription?: { isPro?: unknown } };
       if (coerceProfileIsPro(row.subscription?.isPro)) {
         setProStatus("pro");
-        setSubscriptionTier("premium");
         setConfirmingPro(false);
         router.replace("/profile");
         window.clearInterval(id);
@@ -146,11 +134,13 @@ export default function ProfilePage() {
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm text-muted-foreground">Current plan</p>
               <SubscriptionTierBadge
-                tier={proStatus === "pro" ? "pro" : proStatus === "free" ? "free" : "unknown"}
+                tier={proStatus === "pro" ? "pro" : "free"}
                 syncing={confirmingPro}
               />
-              {subscriptionTier ? (
-                <span className="text-xs text-muted-foreground capitalize">({subscriptionTier})</span>
+              {proStatus !== "unknown" ? (
+                <span className="text-xs text-muted-foreground capitalize">
+                  ({proStatus === "pro" ? "premium" : "free"})
+                </span>
               ) : null}
             </div>
             {confirmingPro ? (

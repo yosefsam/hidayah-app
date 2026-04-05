@@ -20,7 +20,7 @@ const hideNavPaths = ["/onboarding", "/onboarding/complete"];
 export function AppNav() {
   const pathname = usePathname();
   const proStatus = useAppStore((s) => s.proStatus);
-  const tier = proStatus === "pro" ? "pro" : proStatus === "free" ? "free" : "unknown";
+  const tier = proStatus === "pro" ? "pro" : "free";
 
   useEffect(() => {
     if (process.env.NODE_ENV === "development") {
@@ -35,7 +35,7 @@ export function AppNav() {
       <div className="mx-auto flex h-16 max-w-lg items-center justify-around px-2 md:justify-start md:gap-1 md:px-4">
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
-          const isProLockedItem = item.href === "/analytics" && proStatus === "free";
+          const isProLockedItem = item.href === "/analytics" && proStatus !== "pro";
           const href = isProLockedItem ? `/pricing?next=${encodeURIComponent("/analytics")}` : item.href;
           return (
             <Link
@@ -50,7 +50,7 @@ export function AppNav() {
               <span className="flex items-center gap-1">
                 {item.label}
                 {item.href === "/analytics" && proStatus === "pro" ? <Crown className="h-3 w-3 text-primary" /> : null}
-                {item.href === "/analytics" && proStatus === "free" ? <Lock className="h-3 w-3 text-muted-foreground" /> : null}
+                {item.href === "/analytics" && proStatus !== "pro" ? <Lock className="h-3 w-3 text-muted-foreground" /> : null}
               </span>
             </Link>
           );

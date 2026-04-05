@@ -524,7 +524,7 @@ export default function ReaderPage() {
 
           {!readerPreferences.focusMode && persistedAuthUserId && !isDemo && (
             <div className="flex flex-col items-end gap-0.5 shrink-0">
-              <SubscriptionTierBadge tier={proStatus === "pro" ? "pro" : proStatus === "free" ? "free" : "unknown"} />
+              <SubscriptionTierBadge tier={proStatus === "pro" ? "pro" : "free"} />
               {proStatus !== "pro" ? (
                 <span className="text-[10px] text-muted-foreground tabular-nums">
                   Today {freeLimitMeta.used}/{freeLimitMeta.limit} free
