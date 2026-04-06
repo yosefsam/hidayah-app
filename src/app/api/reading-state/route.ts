@@ -20,6 +20,27 @@ export async function GET() {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const subscription = await getUserSubscriptionStatusWithClient(supabase, user.id);
 
+  // Debug: same `profiles` select as `getUserSubscriptionStatusWithClient` — verifies RLS / null row vs computed `isPro`.
+  const { data: profile, error: profileLookupError } = await supabase
+    .from("profiles")
+    .select("is_pro,subscription_status,current_period_end")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  console.log("[API] raw subscription result:", JSON.stringify(subscription));
+  console.log("[API] raw profile:", JSON.stringify(profile));
+  console.log(
+    "[API] profile query (user-scoped JWT client):",
+    JSON.stringify({
+      userId: user.id,
+      selectIncludesIsPro: true,
+      queryError: profileLookupError?.message ?? null,
+      profileIsNull: profile === null,
+      is_proFromDb: profile?.is_pro,
+      subscriptionComputedIsPro: subscription.isPro,
+    })
+  );
+
   if (process.env.NODE_ENV === "development") {
     console.log("[API] GET /api/reading-state", {
       userId: user.id,
