@@ -86,11 +86,6 @@ function isPrefetchRequest(request: NextRequest): boolean {
 }
 
 export async function updateSession(request: NextRequest) {
-  console.log("[MIDDLEWARE] env check", {
-    hasUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
-    hasServiceKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-  });
-
   let supabaseResponse = NextResponse.next({ request });
 
   const { url, publicKey: key } = resolveSupabasePublicEnv();
@@ -120,19 +115,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const middlewareDebug =
-    process.env.NODE_ENV === "development" || process.env.DEBUG_PRO_TRACE === "1";
 
   // App Router API routes: only refresh auth cookies here. Page gates use pathname prefixes
   // that must NOT match `/api/*` — an explicit passthrough avoids extra profile queries and
   // guarantees handlers like `/api/reading-state` always run after session refresh.
   if (pathname.startsWith("/api/")) {
-    if (middlewareDebug) {
-      console.log("[MIDDLEWARE] API passthrough (session refreshed, no page gates)", {
-        pathname,
-        userId: user?.id ?? null,
-      });
-    }
     return supabaseResponse;
   }
 
@@ -142,35 +129,13 @@ export async function updateSession(request: NextRequest) {
 
   // Pro-only route gate: `profiles.is_pro` (updated by Stripe webhook).
   if (isProOnlyPath(pathname) && user && !demo) {
-    const { data: prof, error: profErr } = await fetchProfileIsProRow(user.id, supabase);
-    if (middlewareDebug) {
-      console.log("[MIDDLEWARE] profiles query (pro-only gate)", {
-        userId: user.id,
-        profile: prof,
-        error: profErr?.message ?? null,
-      });
-    }
+    const { data: prof } = await fetchProfileIsProRow(user.id, supabase);
     const isPro = coerceProfileIsPro(prof?.is_pro);
-
-    if (middlewareDebug) {
-      console.log("[MIDDLEWARE] Pro-only gate", {
-        pathname,
-        userId: user.id,
-        profileError: profErr?.message ?? null,
-        rawProfile: prof,
-        rawIsPro: prof?.is_pro,
-        computedIsPro: isPro,
-        decision: isPro ? "allow" : "block → /pricing",
-      });
-    }
 
     if (!isPro) {
       const pricing = new URL("/pricing", request.url);
       pricing.searchParams.set("next", pathname + request.nextUrl.search);
       return redirectPreservingSupabaseSession(supabaseResponse, pricing);
-    }
-    if (middlewareDebug) {
-      console.log("[MIDDLEWARE] Pro-only gate → allow", { pathname, userId: user.id });
     }
   }
 
@@ -208,26 +173,8 @@ export async function updateSession(request: NextRequest) {
   // This ties usage limits to authenticated user IDs and cannot be bypassed
   // by changing client-only local state.
   if (isFreeLimitedPath(pathname) && user && !demo && request.method === "GET" && !prefetch) {
-    const { data: prof, error: profErr } = await fetchProfileIsProRow(user.id, supabase);
-    if (middlewareDebug) {
-      console.log("[MIDDLEWARE] profiles query (free-tier gate)", {
-        userId: user.id,
-        profile: prof,
-        error: profErr?.message ?? null,
-      });
-    }
+    const { data: prof } = await fetchProfileIsProRow(user.id, supabase);
     const isPro = coerceProfileIsPro(prof?.is_pro);
-
-    if (middlewareDebug) {
-      console.log("[MIDDLEWARE] Free-tier daily limit check", {
-        pathname,
-        userId: user.id,
-        profileError: profErr?.message ?? null,
-        rawProfile: prof,
-        rawIsPro: prof?.is_pro,
-        computedIsPro: isPro,
-      });
-    }
 
     if (!isPro) {
       const today = new Date().toISOString().slice(0, 10);
@@ -240,21 +187,10 @@ export async function updateSession(request: NextRequest) {
 
       const current = Number(usageRow?.reader_visits ?? 0) || 0;
       if (current >= freeDailyLimit) {
-        if (middlewareDebug) {
-          console.log("[MIDDLEWARE] Free limit exceeded → block → /pricing", {
-            pathname,
-            userId: user.id,
-            current,
-            freeDailyLimit,
-          });
-        }
         const pricing = new URL("/pricing", request.url);
         pricing.searchParams.set("limit", "free");
         pricing.searchParams.set("next", pathname + request.nextUrl.search);
         return redirectPreservingSupabaseSession(supabaseResponse, pricing);
-      }
-      if (middlewareDebug) {
-        console.log("[MIDDLEWARE] Free tier under limit → allow", { pathname, userId: user.id, current });
       }
       // Free-tier usage is incremented via POST /api/usage/free-daily-increment (reader + session SPA navigation).
     }

@@ -23,12 +23,6 @@ async function syncProFromProfile() {
   } catch {
     row = null;
   }
-  console.log("[STORE] subscription.isPro:", row?.subscription?.isPro);
-  console.log("[STORE] reading-state full API response", {
-    ok: res.ok,
-    status: res.status,
-    body: row,
-  });
   if (!res.ok || !row || row.error) return;
   applyProFromReadingStateRow(row);
 }
@@ -37,9 +31,6 @@ function applyProFromReadingStateRow(row: ReadingStateRow) {
   if (row.subscription == null) return;
   const raw = row.subscription.isPro;
   const next = coerceProfileIsPro(raw) ? "pro" : "free";
-  if (process.env.NODE_ENV === "development") {
-    console.log("[STORE] isPro → proStatus mapping", { source: "reading-state", raw, next });
-  }
   useAppStore.getState().setProStatus(next);
 }
 
@@ -157,13 +148,7 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
       const res = await fetch("/api/reading-state", { credentials: "include" });
       if (res.status === 401 || !res.ok || cancelled) return;
       const row = (await res.json()) as ReadingStateRow & Record<string, unknown>;
-      console.log("[STORE] subscription.isPro:", row?.subscription?.isPro);
       if (!row || row.error || cancelled) return;
-      console.log("[STORE] reading-state full API response", {
-        ok: res.ok,
-        status: res.status,
-        body: row,
-      });
       if (Array.isArray(row.visited_pages)) setVisitedPages(row.visited_pages);
       if (Array.isArray(row.completed_pages)) setCompletedPages(row.completed_pages);
       applyProFromReadingStateRow(row);
