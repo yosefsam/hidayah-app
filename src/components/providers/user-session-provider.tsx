@@ -12,25 +12,24 @@ type ReadingStateRow = {
   error?: unknown;
 };
 
-type BrowserSupabase = ReturnType<typeof createClient>;
-
-/** Client read of `profiles.is_pro` (RLS: own row) — refreshes UI when reading-state was cached before checkout. */
-async function syncProFromProfile(supabase: BrowserSupabase | undefined) {
-  if (!supabase) return;
+/** Re-fetch Pro from GET /api/reading-state (server client, not browser RLS). */
+async function syncProFromProfile() {
   const { isDemo: demo } = useAppStore.getState();
   if (demo) return;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return;
-  const { data, error } = await supabase.from("profiles").select("is_pro").eq("id", user.id).maybeSingle();
-  if (error) return;
-  const raw = data?.is_pro;
-  const next = coerceProfileIsPro(raw) ? "pro" : "free";
-  if (process.env.NODE_ENV === "development") {
-    console.log("[STORE] isPro → proStatus mapping", { source: "profiles", raw, next });
+  const res = await fetch("/api/reading-state", { credentials: "include" });
+  let row: ReadingStateRow | null = null;
+  try {
+    row = (await res.json()) as ReadingStateRow;
+  } catch {
+    row = null;
   }
-  useAppStore.getState().setProStatus(next);
+  console.log("[STORE] reading-state full API response", {
+    ok: res.ok,
+    status: res.status,
+    body: row,
+  });
+  if (!res.ok || !row || row.error) return;
+  applyProFromReadingStateRow(row);
 }
 
 function applyProFromReadingStateRow(row: ReadingStateRow) {
@@ -158,10 +157,14 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
       if (res.status === 401 || !res.ok || cancelled) return;
       const row = (await res.json()) as ReadingStateRow & Record<string, unknown>;
       if (!row || row.error || cancelled) return;
+      console.log("[STORE] reading-state full API response", {
+        ok: res.ok,
+        status: res.status,
+        body: row,
+      });
       if (Array.isArray(row.visited_pages)) setVisitedPages(row.visited_pages);
       if (Array.isArray(row.completed_pages)) setCompletedPages(row.completed_pages);
       applyProFromReadingStateRow(row);
-      void syncProFromProfile(supabase);
       if (row.last_read_page && typeof row.last_read_page === "number") {
         setLastReadPosition({
           userId: persistedAuthUserId,
@@ -207,14 +210,7 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (!supabase || isDemo || !persistedAuthUserId) return;
     const refreshPro = async () => {
-      const res = await fetch("/api/reading-state", { credentials: "include" });
-      if (!res.ok) {
-        void syncProFromProfile(supabase);
-        return;
-      }
-      const row = (await res.json()) as ReadingStateRow;
-      if (!row?.error) applyProFromReadingStateRow(row);
-      void syncProFromProfile(supabase);
+      await syncProFromProfile();
     };
     const onVis = () => {
       if (document.visibilityState === "visible") void refreshPro();
