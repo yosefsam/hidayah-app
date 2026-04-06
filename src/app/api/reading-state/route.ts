@@ -42,6 +42,7 @@ export async function GET() {
     freeUsage = { used, limit };
   }
 
+  console.log("[API] returning subscription:", JSON.stringify(subscription));
   return NextResponse.json({ ...data, subscription, freeUsage });
 }
 

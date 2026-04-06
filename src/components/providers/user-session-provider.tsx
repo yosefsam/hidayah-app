@@ -23,6 +23,7 @@ async function syncProFromProfile() {
   } catch {
     row = null;
   }
+  console.log("[STORE] subscription.isPro:", row?.subscription?.isPro);
   console.log("[STORE] reading-state full API response", {
     ok: res.ok,
     status: res.status,
@@ -80,7 +81,7 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name")
+        .select("full_name")
         .eq("id", user.id)
         .maybeSingle();
       setAuthIdentity({
@@ -131,7 +132,7 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
       }
       const { data: profile } = await supabase
         .from("profiles")
-        .select("display_name")
+        .select("full_name")
         .eq("id", user.id)
         .maybeSingle();
       if (cancelled) return;
@@ -156,6 +157,7 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
       const res = await fetch("/api/reading-state", { credentials: "include" });
       if (res.status === 401 || !res.ok || cancelled) return;
       const row = (await res.json()) as ReadingStateRow & Record<string, unknown>;
+      console.log("[STORE] subscription.isPro:", row?.subscription?.isPro);
       if (!row || row.error || cancelled) return;
       console.log("[STORE] reading-state full API response", {
         ok: res.ok,
