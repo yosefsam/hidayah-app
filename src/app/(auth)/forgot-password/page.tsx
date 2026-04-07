@@ -5,7 +5,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { normalizeAuthEmail } from "@/lib/auth/email";
 import { createClient, SupabaseEnvError } from "@/lib/supabase/client";
-import { getAuthSiteUrl } from "@/lib/site-url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,7 +35,7 @@ export default function ForgotPasswordPage() {
       return;
     }
     const { error: err } = await supabase.auth.resetPasswordForEmail(emailNormalized, {
-      redirectTo: `${getAuthSiteUrl()}/auth/callback?next=/reset-password`,
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://hidayah.io"}/auth/callback?next=/reset-password`,
     });
     setLoading(false);
     if (err) {
