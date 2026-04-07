@@ -170,10 +170,6 @@ export default function PricingPage() {
             >
               {loading ? "Redirecting…" : "Upgrade to Pro"}
             </Button>
-            <p className="text-xs text-zinc-500 text-center">
-              Configure <code className="text-zinc-400">STRIPE_SECRET_KEY</code> and{" "}
-              <code className="text-zinc-400">STRIPE_PRICE_PREMIUM</code> in production.
-            </p>
           </CardFooter>
         </Card>
 
