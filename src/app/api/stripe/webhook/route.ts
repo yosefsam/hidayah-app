@@ -22,6 +22,15 @@ function userIdFromCheckoutSession(session: Stripe.Checkout.Session): string | n
   return null;
 }
 
+function checkoutSessionProfileEmail(session: Stripe.Checkout.Session): string | null {
+  if (typeof session.customer_email === "string" && session.customer_email.trim()) {
+    return session.customer_email.trim();
+  }
+  const d = session.customer_details;
+  if (d && typeof d.email === "string" && d.email.trim()) return d.email.trim();
+  return null;
+}
+
 export async function POST(request: Request) {
   const stripe = getStripe();
   const whSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -84,19 +93,32 @@ export async function POST(request: Request) {
           console.error("[stripe webhook] checkout.session.completed: DATABASE_URL missing; cannot run direct Postgres update");
           return NextResponse.json({ error: "Server misconfigured" }, { status: 501 });
         }
-        try {
-          console.log("Using direct Postgres query for profile update");
-          await pgPool.query(
-            `UPDATE public.profiles
+        const profileProUpdateSql = `UPDATE public.profiles
              SET
                is_pro = true,
                subscription_status = 'active',
                stripe_customer_id = COALESCE($2, stripe_customer_id),
                stripe_subscription_id = COALESCE($3, stripe_subscription_id),
                updated_at = now()
-             WHERE id = $1`,
-            [userId, customerId, stripeSubscriptionId]
-          );
+             WHERE id = $1`;
+        const profileProParams = [userId, customerId, stripeSubscriptionId];
+
+        try {
+          console.log("Using direct Postgres query for profile update");
+          let updateRes = await pgPool.query(profileProUpdateSql, profileProParams);
+          if (updateRes.rowCount === 0) {
+            console.warn(
+              "[stripe webhook] checkout.session.completed: profile row missing, inserting then retrying update",
+              { userId }
+            );
+            await pgPool.query(
+              `INSERT INTO public.profiles (id, email)
+               VALUES ($1, $2)
+               ON CONFLICT (id) DO NOTHING`,
+              [userId, checkoutSessionProfileEmail(session)]
+            );
+            updateRes = await pgPool.query(profileProUpdateSql, profileProParams);
+          }
         } catch (pgErr: unknown) {
           const e = pgErr as { message?: string; code?: string };
           console.error("[stripe webhook] checkout.session.completed: direct Postgres profiles update failed", {

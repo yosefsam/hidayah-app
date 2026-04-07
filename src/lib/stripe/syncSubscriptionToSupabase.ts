@@ -25,17 +25,31 @@ export async function syncStripeSubscriptionToSupabase(
     ? new Date(sub.current_period_end * 1000).toISOString()
     : null;
 
-  await admin
+  const profilePatch = {
+    stripe_customer_id: customerId ?? undefined,
+    stripe_subscription_id: sub.id,
+    subscription_status: status,
+    subscription_tier: tier,
+    is_pro: tier === "premium",
+    current_period_end: currentPeriodEndIso,
+  };
+
+  const { data: updatedRows, error: profileUpdateErr } = await admin
     .from("profiles")
-    .update({
-      stripe_customer_id: customerId ?? undefined,
-      stripe_subscription_id: sub.id,
-      subscription_status: status,
-      subscription_tier: tier,
-      is_pro: tier === "premium",
-      current_period_end: currentPeriodEndIso,
-    })
-    .eq("id", userId);
+    .update(profilePatch)
+    .eq("id", userId)
+    .select("id");
+
+  if (profileUpdateErr) {
+    console.error("[stripe webhook] syncStripeSubscriptionToSupabase: profiles update error", profileUpdateErr);
+  } else if (!updatedRows?.length) {
+    console.warn("[stripe webhook] syncStripeSubscriptionToSupabase: no profile row, inserting stub", { userId });
+    const { error: insertErr } = await admin.from("profiles").insert({ id: userId });
+    if (insertErr && insertErr.code !== "23505") {
+      console.error("[stripe webhook] syncStripeSubscriptionToSupabase: profiles insert failed", insertErr);
+    }
+    await admin.from("profiles").update(profilePatch).eq("id", userId);
+  }
 
   await admin.from("subscriptions").upsert(
     {
