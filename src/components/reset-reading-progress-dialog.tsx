@@ -26,18 +26,48 @@ export function ResetReadingProgressDialog({
   const router = useRouter();
   const resetReadingProgress = useAppStore((s) => s.resetReadingProgress);
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
-  function confirm() {
-    resetReadingProgress();
-    setOpen(false);
-    router.refresh();
+  async function confirm() {
+    setSyncError(null);
+    setBusy(true);
+    try {
+      resetReadingProgress();
+      const s = useAppStore.getState();
+      const res = await fetch("/api/reading-state", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          visited_pages: [],
+          completed_pages: [],
+          last_read_page: null,
+          streak: null,
+          sessions: [],
+          bookmarks: s.bookmarks,
+          reader_preferences: s.readerPreferences,
+          today_progress: 0,
+          today_status: "none",
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        setSyncError(body?.error ?? "Could not save reset to your account.");
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button type="button" variant={variant} className={className}>
-          {triggerLabel}
+        <Button type="button" variant={variant} className={className} disabled={busy}>
+          {busy ? "Resetting…" : triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
@@ -51,12 +81,13 @@ export function ResetReadingProgressDialog({
             </span>
           </DialogDescription>
         </DialogHeader>
+        {syncError ? <p className="text-sm text-destructive">{syncError}</p> : null}
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+          <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={busy}>
             Cancel
           </Button>
-          <Button type="button" variant="destructive" onClick={confirm}>
-            Reset progress
+          <Button type="button" variant="destructive" onClick={() => void confirm()} disabled={busy}>
+            {busy ? "Resetting…" : "Reset progress"}
           </Button>
         </DialogFooter>
       </DialogContent>

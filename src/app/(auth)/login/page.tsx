@@ -75,40 +75,79 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
+    <div className="dark min-h-screen flex flex-col items-center justify-center p-4 bg-[hsl(24_10%_6%)] text-zinc-100 antialiased">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
-          <HidayahLogo size="md" tone="auto" />
+          <HidayahLogo size="md" tone="onDark" />
         </div>
-        <Card className="border-0 shadow-lg">
+        <Card className="border-white/10 bg-zinc-900/50 backdrop-blur shadow-xl">
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Welcome back</CardTitle>
-            <CardDescription>Sign in to continue your reading journey</CardDescription>
+            <CardTitle className="text-xl text-zinc-100">Welcome back</CardTitle>
+            <CardDescription className="text-zinc-400">Sign in to continue your reading journey</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
-              {error && <p className="text-sm text-destructive bg-destructive/10 rounded-lg p-3">{error}</p>}
+              {error && (
+                <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg p-3">{error}</p>
+              )}
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
+                <Label htmlFor="email" className="text-zinc-200">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  className="border-white/10 bg-zinc-950/50 text-zinc-100"
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
+                <Label htmlFor="password" className="text-zinc-200">
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  className="border-white/10 bg-zinc-950/50 text-zinc-100"
+                />
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" size="lg" disabled={loading}>{loading ? "Signing in…" : "Sign in"}</Button>
-              <p className="text-sm text-muted-foreground text-center">
-                <Link href="/forgot-password" className="text-primary font-medium hover:underline">
+              <Button
+                type="submit"
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white"
+                size="lg"
+                disabled={loading}
+              >
+                {loading ? "Signing in…" : "Sign in"}
+              </Button>
+              <p className="text-sm text-zinc-500 text-center">
+                <Link href="/forgot-password" className="text-emerald-400 font-medium hover:underline">
                   Forgot password?
                 </Link>
               </p>
-              <p className="text-sm text-muted-foreground text-center">Don&apos;t have an account? <Link href="/signup" className="text-primary font-medium hover:underline">Sign up</Link></p>
+              <p className="text-sm text-zinc-500 text-center">
+                Don&apos;t have an account?{" "}
+                <Link href="/signup" className="text-emerald-400 font-medium hover:underline">
+                  Sign up
+                </Link>
+              </p>
             </CardFooter>
           </form>
         </Card>
-        <p className="text-center mt-6"><Link href="/" className="text-sm text-muted-foreground hover:text-foreground">← Back to home</Link></p>
+        <p className="text-center mt-6">
+          <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
+            ← Back to home
+          </Link>
+        </p>
       </motion.div>
     </div>
   );

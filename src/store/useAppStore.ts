@@ -148,7 +148,6 @@ export const useAppStore = create<AppState>()(
           lastReadPosition: null,
           todayProgress: 0,
           todayStatus: "none",
-          proStatus: "unknown",
         });
       },
 

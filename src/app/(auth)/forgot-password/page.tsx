@@ -36,7 +36,7 @@ export default function ForgotPasswordPage() {
       return;
     }
     const { error: err } = await supabase.auth.resetPasswordForEmail(emailNormalized, {
-      redirectTo: `${getAuthSiteUrl()}/auth/callback?next=/update-password`,
+      redirectTo: `${getAuthSiteUrl()}/auth/callback?next=/reset-password`,
     });
     setLoading(false);
     if (err) {
@@ -48,11 +48,15 @@ export default function ForgotPasswordPage() {
 
   if (done) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm text-center space-y-4">
-          <HidayahLogo size="md" tone="auto" />
-          <p className="text-sm text-muted-foreground">Check your email for a reset link.</p>
-          <Button asChild variant="outline">
+      <div className="dark min-h-screen flex flex-col items-center justify-center p-4 bg-[hsl(24_10%_6%)] text-zinc-100 antialiased">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-sm text-center space-y-4"
+        >
+          <HidayahLogo size="md" tone="onDark" />
+          <p className="text-sm text-zinc-400">Check your email for a reset link.</p>
+          <Button asChild variant="outline" className="border-white/20 bg-transparent text-zinc-100 hover:bg-white/10">
             <Link href="/login">Back to sign in</Link>
           </Button>
         </motion.div>
@@ -61,21 +65,25 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
+    <div className="dark min-h-screen flex flex-col items-center justify-center p-4 bg-[hsl(24_10%_6%)] text-zinc-100 antialiased">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
-          <HidayahLogo size="md" tone="auto" />
+          <HidayahLogo size="md" tone="onDark" />
         </div>
-        <Card className="border-0 shadow-lg">
+        <Card className="border-white/10 bg-zinc-900/50 backdrop-blur shadow-xl">
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">Reset password</CardTitle>
-            <CardDescription>We&apos;ll email you a link to choose a new password.</CardDescription>
+            <CardTitle className="text-xl text-zinc-100">Reset password</CardTitle>
+            <CardDescription className="text-zinc-400">We&apos;ll email you a link to choose a new password.</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
-              {error && <p className="text-sm text-destructive bg-destructive/10 rounded-lg p-3">{error}</p>}
+              {error && (
+                <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg p-3">{error}</p>
+              )}
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-zinc-200">
+                  Email
+                </Label>
                 <Input
                   id="email"
                   type="email"
@@ -84,15 +92,21 @@ export default function ForgotPasswordPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
+                  className="border-white/10 bg-zinc-950/50 text-zinc-100"
                 />
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" size="lg" disabled={loading}>
+              <Button
+                type="submit"
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white"
+                size="lg"
+                disabled={loading}
+              >
                 {loading ? "Sending…" : "Send reset link"}
               </Button>
-              <p className="text-sm text-muted-foreground text-center">
-                <Link href="/login" className="text-primary font-medium hover:underline">
+              <p className="text-sm text-zinc-500 text-center">
+                <Link href="/login" className="text-emerald-400 font-medium hover:underline">
                   Back to sign in
                 </Link>
               </p>

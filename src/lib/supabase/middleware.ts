@@ -60,6 +60,7 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/signup")) return true;
   if (pathname.startsWith("/pricing")) return true;
   if (pathname.startsWith("/forgot-password")) return true;
+  if (pathname.startsWith("/reset-password")) return true;
   if (pathname.startsWith("/update-password")) return true;
   if (pathname.startsWith("/auth/callback")) return true;
   if (pathname.startsWith("/api/stripe/webhook")) return true;
