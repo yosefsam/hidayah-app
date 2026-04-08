@@ -10,6 +10,9 @@ dist
 .env.*
 !.env.example
 
+# Generated locally by scripts/generate-devlog.js
+Hidayah_DevLog.docx
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
