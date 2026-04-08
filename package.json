@@ -7,8 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "quran:build": "node scripts/build-quran-pages.mjs",
-    "devlog": "node scripts/generate-devlog.js"
+    "quran:build": "node scripts/build-quran-pages.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.4",
@@ -42,7 +41,6 @@
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",
-    "docx": "^9.6.1",
     "eslint": "^9.17.0",
     "eslint-config-next": "15.5.14",
     "postcss": "^8.4.49",
