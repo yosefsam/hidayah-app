@@ -14,7 +14,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { Flame, BookOpen, Target, TrendingUp, Award, MapPin } from "lucide-react";
 import { ResetReadingProgressDialog } from "@/components/reset-reading-progress-dialog";
-import { ProGate } from "@/components/subscription/ProGate";
 
 const unitLabel: Record<string, string> = { pages: "pages", ayahs: "verses", minutes: "minutes", surahs: "surahs" };
 
@@ -59,7 +58,7 @@ export default function AnalyticsPage() {
   const completionPct = mushafCompletionPercent(completedPages.length);
 
   return (
-    <ProGate>
+    <>
       <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -223,6 +222,6 @@ export default function AnalyticsPage() {
         </Card>
       </motion.section>
       </div>
-    </ProGate>
+    </>
   );
 }

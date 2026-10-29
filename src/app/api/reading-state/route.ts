@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getUserSubscriptionStatus } from "@/lib/subscription/getUserSubscriptionStatus";
-import { getFreeDailyReaderLimit } from "@/lib/subscription/freeTierLimits";
 
 export const dynamic = "force-dynamic";
 
@@ -16,23 +14,7 @@ export async function GET() {
 
   const { data, error } = await supabase.from("user_reading_state").select("*").eq("user_id", user.id).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const subscription = await getUserSubscriptionStatus(user.id);
-
-  const limit = getFreeDailyReaderLimit();
-  const today = new Date().toISOString().slice(0, 10);
-  let freeUsage: { used: number; limit: number } | null = null;
-  if (!subscription.isPro) {
-    const { data: usageRow } = await supabase
-      .from("free_usage_daily")
-      .select("reader_visits")
-      .eq("user_id", user.id)
-      .eq("usage_date", today)
-      .maybeSingle();
-    const used = Number(usageRow?.reader_visits ?? 0) || 0;
-    freeUsage = { used, limit };
-  }
-
-  return NextResponse.json({ ...data, subscription, freeUsage });
+  return NextResponse.json(data ?? {});
 }
 
 export async function POST(request: Request) {

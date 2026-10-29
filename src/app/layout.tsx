@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Noto_Naskh_Arabic } from "next/font/google";
 import "./globals.css";
 import { AppProviders } from "@/components/providers/app-providers";
@@ -7,6 +7,12 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const notoNaskhArabic = Noto_Naskh_Arabic({ subsets: ["arabic"], variable: "--font-arabic" });
 
 const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hidayah.io";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(site),

@@ -5,11 +5,11 @@ import { MigrateReaderStore } from "@/components/migrate-reader-store";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-background flex flex-col pb-20 md:pb-0">
+    <div className="app-shell min-h-screen supports-[height:100dvh]:min-h-dvh bg-background flex flex-col">
       <MigrateReaderStore />
       <DemoBanner />
       <AppHeader />
-      <main className="flex-1">{children}</main>
+      <main className="min-w-0 flex-1">{children}</main>
       <AppNav />
     </div>
   );

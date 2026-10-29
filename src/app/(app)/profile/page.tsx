@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useAppStore } from "@/store/useAppStore";
@@ -11,18 +11,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { User, Target, Bell, Palette, LogOut, BookOpen, CreditCard } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { User, Target, Bell, Palette, LogOut, BookOpen } from "lucide-react";
+import { useMemo } from "react";
 import { HidayahLogo } from "@/components/brand/hidayah-logo";
 import { ResetReadingProgressDialog } from "@/components/reset-reading-progress-dialog";
-import { coerceProfileIsPro } from "@/lib/subscription/coerceProfileIsPro";
-import { SubscriptionTierBadge } from "@/components/subscription/subscription-tier-badge";
 
 const unitLabel: Record<string, string> = { pages: "Pages", ayahs: "Verses", minutes: "Minutes", surahs: "Surahs" };
 
 export default function ProfilePage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const supabase = useMemo(() => {
     try {
       return createClient();
@@ -41,41 +38,8 @@ export default function ProfilePage() {
   const lastReadPosition = useAppStore((s) => s.lastReadPosition);
   const clearDataForUserSwitch = useAppStore((s) => s.clearDataForUserSwitch);
   const setPersistedAuthUserId = useAppStore((s) => s.setPersistedAuthUserId);
-  const proStatus = useAppStore((s) => s.proStatus);
-  const setProStatus = useAppStore((s) => s.setProStatus);
   const authDisplayName = useAppStore((s) => s.authDisplayName);
   const authEmail = useAppStore((s) => s.authEmail);
-  const [confirmingPro, setConfirmingPro] = useState(false);
-
-  useEffect(() => {
-    if (searchParams.get("subscription") !== "success") return;
-    setConfirmingPro(true);
-    let n = 0;
-    const id = window.setInterval(async () => {
-      n += 1;
-      const res = await fetch("/api/reading-state", { credentials: "include" });
-      const row = (await res.json().catch(() => ({}))) as { subscription?: { isPro?: unknown } };
-      if (coerceProfileIsPro(row.subscription?.isPro)) {
-        setProStatus("pro");
-        setConfirmingPro(false);
-        router.replace("/profile");
-        window.clearInterval(id);
-        return;
-      }
-      if (n >= 24) {
-        setConfirmingPro(false);
-        window.clearInterval(id);
-      }
-    }, 2500);
-    return () => window.clearInterval(id);
-  }, [searchParams, router, setProStatus]);
-
-  async function openBillingPortal() {
-    const res = await fetch("/api/stripe/portal", { method: "POST", credentials: "include" });
-    const body = await res.json();
-    if (body.url) window.location.href = body.url;
-  }
-
   async function handleSignOut() {
     setPersistedAuthUserId(null);
     clearDataForUserSwitch();
@@ -88,14 +52,14 @@ export default function ProfilePage() {
     <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
       <header className="space-y-4">
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
               ← Dashboard
             </Link>
             <h1 className="text-xl font-semibold mt-2">Profile & settings</h1>
             <p className="text-sm text-muted-foreground">Manage your account and preferences</p>
           </div>
-          <HidayahLogo size="sm" href={null} tone="auto" withWordmark />
+          <HidayahLogo size="sm" href={null} tone="auto" collapseWordmarkOnMobile />
         </div>
       </header>
 
@@ -121,48 +85,6 @@ export default function ProfilePage() {
         </Card>
       </motion.section>
 
-      <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
-              Plan
-            </CardTitle>
-            <CardDescription>Subscription & billing (Stripe)</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm text-muted-foreground">Current plan</p>
-              <SubscriptionTierBadge
-                tier={proStatus === "pro" ? "pro" : "free"}
-                syncing={confirmingPro}
-              />
-              {proStatus !== "unknown" ? (
-                <span className="text-xs text-muted-foreground capitalize">
-                  ({proStatus === "pro" ? "premium" : "free"})
-                </span>
-              ) : null}
-            </div>
-            {confirmingPro ? (
-              <p className="text-xs text-muted-foreground">Confirming your subscription with Stripe…</p>
-            ) : null}
-            <p className="text-sm text-muted-foreground">
-              Free accounts have a small daily limit on reader and session usage. Pro is unlimited for those flows.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/pricing">View pricing</Link>
-              </Button>
-              <Button variant="secondary" size="sm" type="button" onClick={openBillingPortal}>
-                Manage billing
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Premium status is verified server-side (Supabase + Stripe). If you just paid, status may take a few seconds.
-            </p>
-          </CardContent>
-        </Card>
-      </motion.section>
 
       <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
         <Card>

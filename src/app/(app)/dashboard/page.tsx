@@ -45,7 +45,6 @@ export default function DashboardPage() {
   const userGoal = useAppStore((s) => s.userGoal);
   const streak = useAppStore((s) => s.streak);
   const sessions = useAppStore((s) => s.sessions);
-  const proStatus = useAppStore((s) => s.proStatus);
   const setUserGoal = useAppStore((s) => s.setUserGoal);
   const setStreak = useAppStore((s) => s.setStreak);
   const setSessions = useAppStore((s) => s.setSessions);
@@ -123,13 +122,6 @@ export default function DashboardPage() {
               ? `${target - progress} ${unitLabel[goal.unit]} to go`
               : `Your goal: ${target} ${unitLabel[goal.unit]}`}
         </p>
-        {proStatus === "free" ? (
-          <div className="mt-3">
-            <Button asChild variant="secondary" size="sm">
-              <Link href={`/pricing?next=${encodeURIComponent("/dashboard")}`}>Upgrade to Pro</Link>
-            </Button>
-          </div>
-        ) : null}
       </motion.header>
 
       <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>

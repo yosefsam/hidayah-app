@@ -30,11 +30,6 @@ export function LandingFooter() {
                   Get started
                 </Link>
               </li>
-              <li>
-                <Link href="/pricing" className="transition hover:text-white">
-                  Pricing
-                </Link>
-              </li>
             </ul>
           </div>
           <div>

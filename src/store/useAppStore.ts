@@ -55,9 +55,6 @@ interface AppState {
   addVisitedPage: (page: number) => void;
   addCompletedPage: (page: number) => void;
 
-  /** Pro status from `profiles.is_pro` via GET /api/reading-state (and visibility refresh). */
-  proStatus: "unknown" | "free" | "pro";
-  setProStatus: (s: "unknown" | "free" | "pro") => void;
 
   /** Clears reading history, streak, page progress, sessions, and resume position. Bookmarks kept. */
   resetReadingProgress: () => void;
@@ -171,15 +168,12 @@ export const useAppStore = create<AppState>()(
           onboardingPreferences: null,
           reminder: null,
           isDemo: false,
-          proStatus: "unknown",
           authDisplayName: null,
           authEmail: null,
         });
         setDemoCookieClient(false);
       },
 
-      proStatus: "unknown",
-      setProStatus: (proStatus) => set({ proStatus }),
     }),
     {
       name: "hidayah-app",

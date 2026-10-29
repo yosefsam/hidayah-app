@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useAppStore } from "@/store/useAppStore";
@@ -14,7 +14,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Check, BookOpen } from "lucide-react";
-import { FreeLimitPaywallDialog } from "@/components/subscription/free-limit-paywall-dialog";
 
 const UNITS = [{ value: "pages", label: "Pages" }, { value: "ayahs", label: "Verses (ayahs)" }, { value: "minutes", label: "Minutes" }, { value: "surahs", label: "Surahs" }] as const;
 
@@ -24,37 +23,11 @@ export default function SessionPage() {
   const addSession = useAppStore((s) => s.addSession);
   const setStreak = useAppStore((s) => s.setStreak);
   const streak = useAppStore((s) => s.streak);
-  const isDemo = useAppStore((s) => s.isDemo);
-  const persistedAuthUserId = useAppStore((s) => s.persistedAuthUserId);
-  const proStatus = useAppStore((s) => s.proStatus);
 
   const [amount, setAmount] = useState(goal.dailyAmount);
   const [unit, setUnit] = useState(goal.unit);
   const [note, setNote] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [paywallOpen, setPaywallOpen] = useState(false);
-  const [freeMeta, setFreeMeta] = useState({ used: 3, limit: 3 });
-  const sessionFreeCountedRef = useRef(false);
-
-  useEffect(() => {
-    if (sessionFreeCountedRef.current) return;
-    if (isDemo || !persistedAuthUserId || proStatus === "pro") return;
-    sessionFreeCountedRef.current = true;
-    void (async () => {
-      const res = await fetch("/api/usage/free-daily-increment", { method: "POST", credentials: "include" });
-      const body = (await res.json().catch(() => ({}))) as { used?: number; limit?: number; limitReached?: boolean };
-      if (typeof body.used === "number" && typeof body.limit === "number") {
-        setFreeMeta({ used: body.used, limit: body.limit });
-      }
-      if (res.status === 429 && body.limitReached) {
-        if (typeof body.used === "number" && typeof body.limit === "number") {
-          setFreeMeta({ used: body.used, limit: body.limit });
-        }
-        setPaywallOpen(true);
-      }
-    })();
-  }, [isDemo, persistedAuthUserId, proStatus]);
-
   const goalCompleted = unit === goal.unit && amount >= goal.dailyAmount;
   const sessionHasanat = getHasanatForSession(amount, unit);
 
@@ -98,13 +71,6 @@ export default function SessionPage() {
 
   return (
     <div className="max-w-lg mx-auto px-4 py-6">
-      <FreeLimitPaywallDialog
-        open={paywallOpen}
-        onOpenChange={setPaywallOpen}
-        used={freeMeta.used}
-        limit={freeMeta.limit}
-        nextPath="/session"
-      />
       <header className="mb-6">
         <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">← Dashboard</Link>
         <h1 className="text-xl font-semibold mt-2">Log reading</h1>

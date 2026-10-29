@@ -2,37 +2,13 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { coerceProfileIsPro } from "@/lib/subscription/coerceProfileIsPro";
 import { resolveUserDisplayName } from "@/lib/user-display";
 import { useAppStore } from "@/store/useAppStore";
 import type { Bookmark, ReaderPreferences, ReadingSession, Streak } from "@/types";
 
 type ReadingStateRow = {
-  subscription?: { isPro?: unknown } | null;
   error?: unknown;
 };
-
-/** Re-fetch Pro from GET /api/reading-state (server client, not browser RLS). */
-async function syncProFromProfile() {
-  const { isDemo: demo } = useAppStore.getState();
-  if (demo) return;
-  const res = await fetch("/api/reading-state", { credentials: "include" });
-  let row: ReadingStateRow | null = null;
-  try {
-    row = (await res.json()) as ReadingStateRow;
-  } catch {
-    row = null;
-  }
-  if (!res.ok || !row || row.error) return;
-  applyProFromReadingStateRow(row);
-}
-
-function applyProFromReadingStateRow(row: ReadingStateRow) {
-  if (row.subscription == null) return;
-  const raw = row.subscription.isPro;
-  const next = coerceProfileIsPro(raw) ? "pro" : "free";
-  useAppStore.getState().setProStatus(next);
-}
 
 export function UserSessionProvider({ children }: { children: React.ReactNode }) {
   const supabase = useMemo(() => {
@@ -143,15 +119,13 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
     let cancelled = false;
     (async () => {
       // Do not gate on getSession(): it can be empty right after sign-in while httpOnly cookies
-      // still authenticate GET /api/reading-state — skipping here left proStatus stale forever (effect
-      // deps would not re-run).
+      // still authenticate GET /api/reading-state.
       const res = await fetch("/api/reading-state", { credentials: "include" });
       if (res.status === 401 || !res.ok || cancelled) return;
       const row = (await res.json()) as ReadingStateRow & Record<string, unknown>;
       if (!row || row.error || cancelled) return;
       if (Array.isArray(row.visited_pages)) setVisitedPages(row.visited_pages);
       if (Array.isArray(row.completed_pages)) setCompletedPages(row.completed_pages);
-      applyProFromReadingStateRow(row);
       if (row.last_read_page && typeof row.last_read_page === "number") {
         setLastReadPosition({
           userId: persistedAuthUserId,
@@ -194,17 +168,6 @@ export function UserSessionProvider({ children }: { children: React.ReactNode })
     setTodayStatus,
   ]);
 
-  useEffect(() => {
-    if (!supabase || isDemo || !persistedAuthUserId) return;
-    const refreshPro = async () => {
-      await syncProFromProfile();
-    };
-    const onVis = () => {
-      if (document.visibilityState === "visible") void refreshPro();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [supabase, isDemo, persistedAuthUserId]);
 
   return <>{children}</>;
 }

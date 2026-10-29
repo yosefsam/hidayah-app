@@ -1,6 +1,6 @@
 # Hidayah
 
-A mobile-first app for **guided Quran reading** and consistent daily practice. Set goals, track streaks, log sessions, and view progress with a calm, premium design.
+A mobile-first app for **guided Quran reading** and consistent daily practice. Set goals, track streaks, log sessions, and view progress with a calm design.
 
 ## Tech stack
 
@@ -79,7 +79,7 @@ src/
 
 ## Production deployment (hidayah.io)
 
-**Stack:** Next.js on **Vercel** (recommended) + **Supabase** + **Stripe**.
+**Stack:** Next.js on **Vercel** (recommended) + **Supabase**.
 
 ### 1. Environment variables
 
@@ -87,14 +87,10 @@ Copy `env.example` → `.env.local` (local) or set in Vercel → Project → Set
 
 | Variable | Purpose |
 |----------|---------|
-| `NEXT_PUBLIC_SITE_URL` | Canonical URL, e.g. `https://hidayah.io` (auth redirects, Stripe return URLs, metadata) |
+| `NEXT_PUBLIC_SITE_URL` | Canonical URL, e.g. `https://hidayah.io` (auth redirects and metadata) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (client-safe). |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Optional alternative to anon key (new Supabase key format). |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Server only** — Stripe webhooks upsert subscription rows |
-| `STRIPE_SECRET_KEY` | Stripe secret key |
-| `STRIPE_WEBHOOK_SECRET` | Signing secret from Stripe Dashboard → Webhooks |
-| `STRIPE_PRICE_PREMIUM` | Stripe Price ID for the Premium subscription |
 
 Never commit real secrets; use Vercel env UI or CI secrets.
 
@@ -107,31 +103,25 @@ Never commit real secrets; use Vercel env UI or CI secrets.
    - Redirect URLs: `https://hidayah.io/**`, `http://localhost:3000/**`
 4. **Auth providers:** enable Email; for production deliverability use **custom SMTP** in Supabase (not Next.js env). See **`docs/supabase-auth-email.md`** for exact redirect URLs, templates notes, and a test checklist.
 
-### 3. Stripe
-
-1. Create a Product and recurring Price; copy the Price ID → `STRIPE_PRICE_PREMIUM`.
-2. **Developers → Webhooks** → endpoint: `https://hidayah.io/api/stripe/webhook`
-   - Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
-   - Copy signing secret → `STRIPE_WEBHOOK_SECRET`
-3. Enable **Customer portal** in Stripe Billing settings (used by “Manage billing” on Profile).
-
-### 4. Deploy to Vercel
+### 3. Deploy to Vercel
 
 1. Import the Git repo into [Vercel](https://vercel.com).
 2. Set all environment variables (Production + Preview as needed).
 3. Add domain **hidayah.io** in Vercel → Domains (DNS: A/ALIAS or CNAME per Vercel instructions).
 4. Deploy; confirm `npm run build` passes (also run locally).
 
-### 5. Auth & routes
+### 4. Auth & routes
 
 - **Middleware** refreshes Supabase cookies and **requires a session** (or demo cookie) for `/dashboard`, `/reader`, `/analytics`, `/profile`, `/onboarding`, `/session`.
 - **Demo:** “Try demo” sets a short-lived `hidayah_demo` cookie so the marketing demo works without login.
 - **Sign out** clears local user-scoped state and session.
 
-### 6. Reading state sync
+### 5. Reading state sync
 
 Authenticated users: progress is **debounced-synced** to `user_reading_state` (Supabase) and loaded on sign-in. Requires migration SQL applied.
 
 ## License
 
 MIT.
+
+Hidayah is fully free for everyone. Reading, translations, session logging, and analytics have no paid tiers or daily usage caps. The retired `/pricing` URL redirects to the homepage. Payment API routes and the payment SDK have been removed. Existing database billing columns and historical migrations are retained to preserve records.

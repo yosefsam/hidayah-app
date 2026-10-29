@@ -1,5 +1,5 @@
 /**
- * Canonical site URL for server-side redirects (auth callback, Stripe, etc.).
+ * Canonical site URL for server-side redirects (auth callback and metadata).
  * Set NEXT_PUBLIC_SITE_URL=https://hidayah.io in production.
  */
 export function getSiteUrl(): string {

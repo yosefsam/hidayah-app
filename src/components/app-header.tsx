@@ -16,7 +16,7 @@ export function AppHeader() {
   const showGreeting = Boolean(authDisplayName && !isDemo);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border/80 bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75">
+    <header className="app-header sticky top-0 z-30 border-b border-border/80 bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75">
       <div className="mx-auto flex h-14 max-w-lg items-center justify-between gap-2 px-4 md:mx-auto md:max-w-4xl">
         <Logo size="sm" tone="auto" collapseWordmarkOnMobile />
         <div className="flex min-w-0 flex-1 items-center justify-end gap-3 md:gap-4">
@@ -33,7 +33,7 @@ export function AppHeader() {
           </nav>
           {showGreeting ? (
             <span
-              className="max-w-[6.5rem] shrink-0 truncate text-xs text-muted-foreground sm:max-w-[12rem] sm:text-sm md:max-w-[14rem]"
+              className="max-w-[6.5rem] min-w-0 truncate text-xs text-muted-foreground sm:max-w-[12rem] sm:text-sm md:max-w-[14rem]"
               title={authDisplayName ?? undefined}
             >
               Hi, {authDisplayName}

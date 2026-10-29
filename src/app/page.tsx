@@ -2,12 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/useAppStore";
 import { demoGoal, demoStreak, demoSessions } from "@/lib/demo-data";
-import { createClient } from "@/lib/supabase/client";
 import {
   BookOpen,
   Target,
@@ -29,29 +27,12 @@ import { LandingFooter } from "@/components/landing/landing-footer";
 export default function LandingPage() {
   const router = useRouter();
   const setDemoMode = useAppStore((s) => s.setDemoMode);
-  const supabase = useMemo(() => {
-    try {
-      return createClient();
-    } catch {
-      return undefined;
-    }
-  }, []);
 
   function startDemo() {
     setDemoMode(true, { goal: demoGoal, streak: demoStreak, sessions: demoSessions });
     router.push("/dashboard");
   }
 
-  async function startUpgrade() {
-    if (!supabase) {
-      router.push("/login?next=%2Fpricing");
-      return;
-    }
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    router.push(session ? "/pricing" : "/login?next=%2Fpricing");
-  }
 
   return (
     <div className="dark min-h-screen bg-[hsl(24_10%_6%)] text-zinc-100 antialiased">
@@ -62,7 +43,7 @@ export default function LandingPage() {
         <div className="absolute bottom-0 left-1/2 h-px w-full max-w-3xl -translate-x-1/2 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
       </div>
 
-      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-zinc-950/75 backdrop-blur-xl">
+      <nav className="landing-nav fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-zinc-950/75 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <Logo size="md" tone="onDark" priority collapseWordmarkOnMobile />
           <div className="flex items-center gap-3 sm:gap-4">
@@ -139,17 +120,9 @@ export default function LandingPage() {
                   Get started free <ChevronRight className="ml-1 h-5 w-5" />
                 </Link>
               </Button>
-              <Button
-                onClick={startUpgrade}
-                size="lg"
-                variant="outline"
-                className="w-full border-emerald-500/40 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/20 sm:w-auto"
-              >
-                Upgrade to Pro
-              </Button>
             </motion.div>
             <p className="mt-3 text-xs text-zinc-500">
-              Free accounts include daily reader/session limits. Upgrade to Pro for uninterrupted usage.
+              Fully free for everyone. All features included, with unlimited reading.
             </p>
             <motion.div
               initial={{ opacity: 0 }}
@@ -237,7 +210,7 @@ export default function LandingPage() {
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl">Everything in one place</h2>
             <p className="mt-4 text-zinc-400">
-              Premium-feeling tools that stay out of your way—so the Quran stays at the center.
+              Thoughtful tools that stay out of your way—so the Quran stays at the center.
             </p>
           </div>
           <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

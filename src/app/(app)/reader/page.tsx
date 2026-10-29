@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAppStore } from "@/store/useAppStore";
 import { demoGoal } from "@/lib/demo-data";
@@ -24,15 +24,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bookmark, BookmarkCheck, ChevronDown, ChevronLeft, ChevronRight, Home, Settings2, Pause, Play, SkipBack, SkipForward, Volume2 } from "lucide-react";
 import { cn, isSameDay } from "@/lib/utils";
 import { useQuranAudioPlayer } from "@/hooks/useQuranAudioPlayer";
-import { SubscriptionTierBadge } from "@/components/subscription/subscription-tier-badge";
-import { FreeLimitPaywallDialog } from "@/components/subscription/free-limit-paywall-dialog";
 
 const SWIPE_THRESHOLD = 60;
-const DEFAULT_FREE_LIMIT = 3;
 
 export default function ReaderPage() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const userGoal = useAppStore((s) => s.userGoal);
   const goal = userGoal ?? demoGoal;
 
@@ -49,68 +45,6 @@ export default function ReaderPage() {
   const setStreak = useAppStore((s) => s.setStreak);
   const addVisitedPage = useAppStore((s) => s.addVisitedPage);
   const addCompletedPage = useAppStore((s) => s.addCompletedPage);
-  const proStatus = useAppStore((s) => s.proStatus);
-  const isDemo = useAppStore((s) => s.isDemo);
-  const persistedAuthUserId = useAppStore((s) => s.persistedAuthUserId);
-
-  const [paywallOpen, setPaywallOpen] = useState(false);
-  const [freeLimitMeta, setFreeLimitMeta] = useState<{ used: number; limit: number }>({ used: 0, limit: DEFAULT_FREE_LIMIT });
-
-  const consumeFreeTierNav = useCallback(async (): Promise<boolean> => {
-    if (isDemo || !persistedAuthUserId) return true;
-    if (proStatus === "pro") return true;
-    const res = await fetch("/api/usage/free-daily-increment", { method: "POST", credentials: "include" });
-    const body = (await res.json().catch(() => ({}))) as { used?: number; limit?: number; limitReached?: boolean };
-    if (typeof body.limit === "number") {
-      setFreeLimitMeta((m) => ({ used: body.used ?? m.used, limit: body.limit }));
-    }
-    if (res.status === 429 && body.limitReached) {
-      setFreeLimitMeta({ used: body.used ?? DEFAULT_FREE_LIMIT, limit: body.limit ?? DEFAULT_FREE_LIMIT });
-      setPaywallOpen(true);
-      return false;
-    }
-    if (res.ok && typeof body.used === "number" && typeof body.limit === "number") {
-      setFreeLimitMeta({ used: body.used, limit: body.limit });
-    }
-    return true;
-  }, [isDemo, persistedAuthUserId, proStatus]);
-
-  useEffect(() => {
-    if (isDemo || !persistedAuthUserId) return;
-    let cancelled = false;
-    (async () => {
-      const res = await fetch("/api/reading-state", { credentials: "include" });
-      if (!res.ok || cancelled) return;
-      const row = (await res.json()) as { freeUsage?: { used: number; limit: number } };
-      if (row.freeUsage && typeof row.freeUsage.used === "number") {
-        setFreeLimitMeta({
-          used: row.freeUsage.used,
-          limit: row.freeUsage.limit ?? DEFAULT_FREE_LIMIT,
-        });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [isDemo, persistedAuthUserId]);
-
-  const initialPageFreeCountedRef = useRef(false);
-  useEffect(() => {
-    if (initialPageFreeCountedRef.current) return;
-    if (isDemo || !persistedAuthUserId || proStatus === "pro") return;
-    initialPageFreeCountedRef.current = true;
-    void (async () => {
-      const res = await fetch("/api/usage/free-daily-increment", { method: "POST", credentials: "include" });
-      const body = (await res.json().catch(() => ({}))) as { used?: number; limit?: number; limitReached?: boolean };
-      if (typeof body.limit === "number") {
-        setFreeLimitMeta((m) => ({ used: body.used ?? m.used, limit: body.limit }));
-      }
-      if (res.status === 429 && body.limitReached) {
-        setPaywallOpen(true);
-      }
-    })();
-  }, [isDemo, persistedAuthUserId, proStatus]);
-
   const deepLinked = searchParams.get("page");
   const deepLinkedPage = deepLinked ? clampPage(parseInt(deepLinked, 10)) : null;
   const initialPage = clampPage(deepLinkedPage ?? lastReadPosition?.page ?? 1);
@@ -185,8 +119,6 @@ export default function ReaderPage() {
     const fromPage = page;
     if (p === fromPage) return;
     void (async () => {
-      const ok = await consumeFreeTierNav();
-      if (!ok) return;
       setDirection(p >= fromPage ? 1 : -1);
       setPage(p);
       markVisited(p);
@@ -376,8 +308,6 @@ export default function ReaderPage() {
     const fromPage = page;
     if (p === fromPage) return;
     void (async () => {
-      const ok = await consumeFreeTierNav();
-      if (!ok) return;
       const prevPage = lastPageRef.current;
       if (p > fromPage) {
         if (prevPage && prevPage !== p) markCompleted(prevPage);
@@ -494,8 +424,8 @@ export default function ReaderPage() {
   const audio = useQuranAudioPlayer();
 
   return (
-    <div className={cn("min-h-[calc(100vh-4rem)]", readerPreferences.focusMode ? "bg-background" : "bg-background")}>
-      <header className={cn("sticky top-0 z-30 border-b bg-background/85 backdrop-blur", readerPreferences.focusMode && "border-transparent")}>
+    <div className={cn("min-h-[calc(100vh-4rem)] supports-[height:100dvh]:min-h-[calc(100dvh-4rem)]", readerPreferences.focusMode ? "bg-background" : "bg-background")}>
+      <header className={cn("reader-toolbar sticky z-20 border-b bg-background/85 backdrop-blur", readerPreferences.focusMode && "border-transparent")}>
         <div className="mx-auto max-w-lg px-4 py-3 flex items-center gap-3">
           <Button variant="ghost" size="icon" asChild aria-label="Home">
             <Link href="/dashboard"><Home className="h-5 w-5" /></Link>
@@ -522,18 +452,6 @@ export default function ReaderPage() {
             </Button>
           )}
 
-          {!readerPreferences.focusMode && persistedAuthUserId && !isDemo && (
-            <div className="flex flex-col items-end gap-0.5 shrink-0">
-              <SubscriptionTierBadge tier={proStatus === "pro" ? "pro" : "free"} />
-              {proStatus !== "pro" ? (
-                <span className="text-[10px] text-muted-foreground tabular-nums">
-                  Today {freeLimitMeta.used}/{freeLimitMeta.limit} free
-                </span>
-              ) : (
-                <span className="text-[10px] text-emerald-600/90 dark:text-emerald-400/90">Unlimited</span>
-              )}
-            </div>
-          )}
 
           {!readerPreferences.focusMode && (
             <Dialog open={navOpen} onOpenChange={setNavOpen}>
@@ -680,20 +598,15 @@ export default function ReaderPage() {
                   <div className="flex items-center justify-between rounded-lg border p-3">
                     <div>
                       <p className="text-sm font-medium">
-                        Translation {proStatus === "pro" ? "(MVP)" : "(Pro)"}
+                        Translation
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {proStatus === "pro" ? "Show a simple translation where available." : "Upgrade to Pro to unlock translation."}
+                        Show a translation where available.
                       </p>
                     </div>
                     <Switch
                       checked={readerPreferences.showTranslation}
                       onCheckedChange={(checked) => {
-                        // Free users can turn translation off, but cannot turn it on.
-                        if (checked && proStatus !== "pro") {
-                          router.push(`/pricing?next=${encodeURIComponent("/reader")}`);
-                          return;
-                        }
                         setReaderPreferences({ showTranslation: checked });
                       }}
                     />
@@ -735,9 +648,9 @@ export default function ReaderPage() {
         </div>
       </header>
 
-      <main className={cn("mx-auto max-w-lg px-4 py-5", !readerPreferences.focusMode ? "pb-24" : "pb-6")}>
+      <main className={cn("mx-auto max-w-lg px-4 py-5", !readerPreferences.focusMode ? "pb-64" : "pb-6")}>
         {!readerPreferences.focusMode && (
-          <div className="fixed top-[74px] right-4 z-40 md:right-[calc(50%-16rem)]">
+          <div className="mb-4 flex justify-end">
             <div className="rounded-full border bg-background/90 backdrop-blur px-3 py-1 text-xs shadow-sm">
               <span className="text-muted-foreground">Hasanat (est.)</span>{" "}
               <span className="font-semibold text-primary tabular-nums">{formatHasanat(totalHasanatDisplay)}</span>
@@ -753,7 +666,7 @@ export default function ReaderPage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.98 }}
               transition={{ type: "spring", stiffness: 300, damping: 24 }}
-              className="fixed top-[118px] right-4 z-50 md:right-[calc(50%-16rem)]"
+              className="fixed top-36 right-4 z-40 md:right-[calc(50%-16rem)]"
             >
               <div className="rounded-full bg-primary text-primary-foreground px-3 py-1 text-xs font-semibold shadow">
                 +{formatHasanat(earnedToast.amount)} est. hasanat
@@ -803,6 +716,7 @@ export default function ReaderPage() {
           >
             <motion.div
               drag="x"
+              style={{ touchAction: "pan-y" }}
               dragConstraints={{ left: 0, right: 0 }}
               dragElastic={0.15}
               onDragEnd={(_, info) => {
@@ -819,7 +733,7 @@ export default function ReaderPage() {
                 </div>
 
                 <div className={cn("rounded-2xl border bg-card/50 p-4 sm:p-5", readerPreferences.focusMode && "border-transparent bg-transparent p-0")}>
-                  <div dir="rtl" className={cn("font-arabic text-right leading-[2.35] tracking-wide", "text-[22px] sm:text-[24px]")}>
+                  <div dir="rtl" className={cn("font-arabic break-words text-right leading-[2.35] tracking-wide", "text-[22px] sm:text-[24px]")}>
                     {ayahs.map((a, idx) => {
                       const prev = ayahs[idx - 1];
                       const startsNewSurah = idx === 0 ? true : a.surahNumber !== prev?.surahNumber;
@@ -891,16 +805,16 @@ export default function ReaderPage() {
       </main>
 
       {!readerPreferences.focusMode && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/90 backdrop-blur">
+        <div className="reader-player fixed left-0 right-0 z-30 border-t bg-background/90 backdrop-blur">
           <div className="mx-auto max-w-lg px-4 py-3 space-y-2">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Now playing</p>
                 <p className="text-sm font-medium truncate">
                   {audio.currentAyah ? `${audio.currentAyah.surahNameEnglish ?? "Surah"} · Ayah ${audio.currentAyah.ayahNumber}` : "—"}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -939,7 +853,7 @@ export default function ReaderPage() {
                 <SkipForward className="h-5 w-5" />
               </Button>
 
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <input
                   type="range"
                   min={0}
@@ -962,7 +876,7 @@ export default function ReaderPage() {
                 <Volume2 className="h-4 w-4 mr-2" />
                 Play page
               </Button>
-              <div className="text-[11px] text-muted-foreground">
+              <div className="min-w-0 text-[11px] text-muted-foreground">
                 Tap any ayah to play it. Page playback plays ayahs in order.
               </div>
             </div>
@@ -970,13 +884,6 @@ export default function ReaderPage() {
         </div>
       )}
 
-      <FreeLimitPaywallDialog
-        open={paywallOpen}
-        onOpenChange={setPaywallOpen}
-        used={freeLimitMeta.used}
-        limit={freeLimitMeta.limit}
-        nextPath="/reader"
-      />
     </div>
   );
 }
