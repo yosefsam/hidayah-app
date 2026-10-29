@@ -7,18 +7,30 @@ import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store/useAppStore";
 
-/** Official Hidayah mark — `/public/logo/hidayah-logo.png` (1024×682, dark-background artwork). */
+/** Original artwork includes a large canvas; crop its visible mark in the presentation layer. */
 export const LOGO_SRC = "/logo/hidayah-logo.png";
 const NATURAL_W = 1024;
 const NATURAL_H = 682;
 
 export type LogoSize = "sm" | "md" | "lg";
 
-const heightClass: Record<LogoSize, string> = {
-  sm: "h-7",
-  md: "h-9",
-  lg: "h-11",
+const wordmarkBoxClass: Record<LogoSize, string> = {
+  sm: "h-7 w-[6.61rem]",
+  md: "h-9 w-[8.5rem]",
+  lg: "h-11 w-[10.39rem]",
 };
+
+// Bounds within the original 1024 × 682 image. Keep all artwork, including the y descender.
+const WORDMARK_CROP = { x: 238, y: 256, width: 548, height: 145 };
+const MARK_CROP = { x: 238, y: 256, width: 145, height: 145 };
+
+function cropStyle(crop: typeof WORDMARK_CROP) {
+  return {
+    width: `${(NATURAL_W / crop.width) * 100}%`,
+    left: `${(-crop.x / crop.width) * 100}%`,
+    top: `${(-crop.y / crop.height) * 100}%`,
+  };
+}
 
 const iconBoxClass: Record<LogoSize, string> = {
   sm: "h-7 w-7",
@@ -55,7 +67,7 @@ function useLogoTone(tone: LogoTone): "onDark" | "onLight" {
 export type LogoProps = {
   className?: string;
   size?: LogoSize;
-  /** Full horizontal logo vs icon-only (left crop: crescent + book). */
+  /** Full horizontal logo or the crescent-and-book mark. */
   withWordmark?: boolean;
   /** Show icon-only on small screens; full logo from `sm` and up (navbar). */
   collapseWordmarkOnMobile?: boolean;
@@ -65,8 +77,8 @@ export type LogoProps = {
 };
 
 /**
- * Hidayah brand logo — approved PNG; `w-auto` preserves aspect ratio (no stretching).
- * On light UI, optional dark chip keeps white wordmark readable.
+ * Display only the artwork bounds, preserving the original aspect ratio.
+ * Light backgrounds use a dark chip so the original white wordmark remains readable.
  */
 export function Logo({
   className,
@@ -81,32 +93,35 @@ export function Logo({
   const needsChip = resolved === "onLight";
 
   const imgFull = (
-    <Image
-      src={LOGO_SRC}
-      alt="Hidayah"
-      width={NATURAL_W}
-      height={NATURAL_H}
-      priority={priority}
-      className={cn(
-        heightClass[size],
-        "w-auto max-w-[10.5rem] object-contain object-left sm:max-w-[14rem]",
-        className
-      )}
-      sizes="(max-width: 640px) 180px, 240px"
-    />
-  );
-
-  const imgIcon = (
-    <div className={cn("relative shrink-0 overflow-hidden rounded-lg", iconBoxClass[size], className)} aria-hidden>
+    <span className={cn("relative inline-block shrink-0 overflow-hidden rounded-md", wordmarkBoxClass[size])}>
       <Image
         src={LOGO_SRC}
         alt=""
-        fill
+        aria-hidden="true"
+        width={NATURAL_W}
+        height={NATURAL_H}
         priority={priority}
-        className="object-cover object-left"
-        sizes="44px"
+        className="absolute block h-auto max-w-none"
+        style={cropStyle(WORDMARK_CROP)}
+        sizes="(max-width: 640px) 260px, 320px"
       />
-    </div>
+    </span>
+  );
+
+  const imgIcon = (
+    <span className={cn("relative inline-block shrink-0 overflow-hidden rounded-md", iconBoxClass[size])}>
+      <Image
+        src={LOGO_SRC}
+        alt=""
+        aria-hidden="true"
+        width={NATURAL_W}
+        height={NATURAL_H}
+        priority={priority}
+        className="absolute block h-auto max-w-none"
+        style={cropStyle(MARK_CROP)}
+        sizes="320px"
+      />
+    </span>
   );
 
   let content: ReactNode;
@@ -122,7 +137,7 @@ export function Logo({
   }
 
   const inner = (
-    <span className="inline-flex items-center">
+    <span className={cn("inline-flex shrink-0 items-center", className)}>
       {needsChip ? (
         <span className="inline-flex items-center rounded-lg bg-zinc-950 px-2 py-1 ring-1 ring-black/5 dark:bg-transparent dark:p-0 dark:ring-0">
           {content}
@@ -134,13 +149,14 @@ export function Logo({
   );
 
   if (href === null) {
-    return inner;
+    return <span role="img" aria-label="Hidayah">{inner}</span>;
   }
 
   return (
     <Link
       href={href}
-      className="outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
+      aria-label="Hidayah"
+      className="inline-flex shrink-0 outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
     >
       {inner}
     </Link>
