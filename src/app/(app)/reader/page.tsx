@@ -21,9 +21,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bookmark, BookmarkCheck, ChevronDown, ChevronLeft, ChevronRight, Home, Settings2, Pause, Play, SkipBack, SkipForward, Volume2 } from "lucide-react";
+import { Bookmark, BookmarkCheck, ChevronDown, ChevronLeft, ChevronRight, Home, Settings2 } from "lucide-react";
 import { cn, isSameDay } from "@/lib/utils";
 import { useQuranAudioPlayer } from "@/hooks/useQuranAudioPlayer";
+import { ReaderAudioBar } from "@/components/reader/reader-audio-bar";
 
 const SWIPE_THRESHOLD = 60;
 
@@ -459,11 +460,12 @@ export default function ReaderPage() {
   useEffect(() => {
     if (!immersive || !chromeVisible) return;
     if (chromeHideTimerRef.current) window.clearTimeout(chromeHideTimerRef.current);
-    chromeHideTimerRef.current = window.setTimeout(() => setChromeVisible(false), 3500);
+    chromeHideTimerRef.current = window.setTimeout(() => setChromeVisible(false), 4500);
     return () => {
       if (chromeHideTimerRef.current) window.clearTimeout(chromeHideTimerRef.current);
     };
-  }, [immersive, chromeVisible, page, audio.isPlaying]);
+    // Intentionally omit audio.isPlaying / page — resetting on every tick made Safari feel stuck.
+  }, [immersive, chromeVisible]);
 
   function resetStreamTo(p: number) {
     const clamped = clampPage(p);
@@ -471,7 +473,39 @@ export default function ReaderPage() {
     setStreamEnd(clamped);
   }
 
+  const streamLoadingRef = useRef(false);
+
+  /** Lightweight stream advance — no page-flip animation, no hasanat toast spam. */
+  function appendStreamPage(nextPage: number) {
+    const p = clampPage(nextPage);
+    if (p <= streamEnd) return;
+    const fromPage = page;
+    if (p > fromPage) {
+      // Quietly complete previous page for progress tracking without toast storms.
+      if (fromPage) markCompleted(fromPage);
+      let earned = 0;
+      for (let pp = fromPage + 1; pp <= p; pp++) {
+        if (awardedPagesRef.current.has(pp)) continue;
+        awardedPagesRef.current.add(pp);
+        const pc = getRuntimePage(pagesData, pp) ?? getPageContent(pp);
+        earned += estimateHasanatForPageContent(pc);
+      }
+      if (earned > 0) {
+        liveEarnedHasanatRef.current += earned;
+        setLiveEarnedHasanat(liveEarnedHasanatRef.current);
+      }
+    }
+    setPage(p);
+    markVisited(p);
+    minPageRef.current = Math.min(minPageRef.current, p);
+    maxPageRef.current = Math.max(maxPageRef.current, p);
+    lastPageRef.current = p;
+    setStreamEnd(p);
+  }
+
   // Continuous vertical reading: append the next mushaf page as the user nears the bottom.
+  // Guard against IntersectionObserver storms (Safari fires repeatedly while the sentinel
+  // stays visible during heavy DOM updates).
   useEffect(() => {
     if (!continuous) return;
     const el = loadMoreSentinelRef.current;
@@ -479,12 +513,17 @@ export default function ReaderPage() {
     const io = new IntersectionObserver(
       (entries) => {
         if (!entries.some((e) => e.isIntersecting)) return;
+        if (streamLoadingRef.current) return;
         const next = clampPage(streamEnd + 1);
         if (next <= streamEnd) return;
-        goToPage(next, 1);
-        setStreamEnd(next);
+        streamLoadingRef.current = true;
+        appendStreamPage(next);
+        // Allow another append only after layout settles.
+        window.setTimeout(() => {
+          streamLoadingRef.current = false;
+        }, 500);
       },
-      { rootMargin: "320px 0px" }
+      { root: null, rootMargin: "80px 0px", threshold: 0 }
     );
     io.observe(el);
     return () => io.disconnect();
@@ -495,18 +534,32 @@ export default function ReaderPage() {
     setChromeVisible(true);
   }
 
-  function toggleChromeFromTap(e: React.MouseEvent | React.TouchEvent) {
+  function toggleChromeFromTap(e: React.MouseEvent | React.PointerEvent) {
     if (!immersive) return;
     const target = e.target as HTMLElement | null;
     if (!target) return;
-    // Don't steal taps from interactive controls or ayah play buttons.
-    if (target.closest("button, a, input, select, textarea, [role='button'], [data-ayah-key]")) return;
+    // Never steal from reader chrome / form controls / nav links.
+    if (target.closest("[data-reader-chrome], input, select, textarea, label")) return;
+    if (target.closest("a") && !target.closest("[data-ayah-key]")) return;
+    // Toolbar/icon buttons (but ayah spans also use role=button — those must still toggle chrome).
+    if (target.closest("button") && !target.closest("[data-ayah-key]")) return;
+
     if (tapGuardRef.current) return;
     tapGuardRef.current = true;
     window.setTimeout(() => {
       tapGuardRef.current = false;
-    }, 280);
-    setChromeVisible((v) => !v);
+    }, 320);
+
+    // When chrome is visible, any tap on the reading surface hides it (including ayah taps).
+    // Ayah onClick still fires for playback. When chrome is hidden, empty-space taps reveal;
+    // ayah taps reveal via revealChrome() inside the ayah handler.
+    if (chromeVisible) {
+      setChromeVisible(false);
+      return;
+    }
+    if (!target.closest("[data-ayah-key]")) {
+      setChromeVisible(true);
+    }
   }
 
   const streamPages = useMemo(() => {
@@ -593,14 +646,16 @@ export default function ReaderPage() {
           ? "min-h-[100dvh] supports-[height:100dvh]:min-h-dvh"
           : "min-h-[calc(100vh-4rem)] supports-[height:100dvh]:min-h-[calc(100dvh-4rem)]"
       )}
-      onClick={toggleChromeFromTap}
     >
       <header
         className={cn(
-          "reader-toolbar reader-chrome sticky z-20 border-b bg-background/90 backdrop-blur",
+          "reader-toolbar reader-chrome sticky z-20 border-b bg-background/90",
           immersive && "border-transparent bg-background/80"
         )}
         data-visible={showChrome ? "true" : "false"}
+        data-reader-chrome=""
+        {...(!showChrome ? ({ inert: true } as React.HTMLAttributes<HTMLElement>) : {})}
+        onPointerDown={(e) => e.stopPropagation()}
       >
         <div className="mx-auto max-w-lg px-4 py-3 flex items-center gap-3" style={{ paddingTop: immersive ? "max(0.75rem, env(safe-area-inset-top))" : undefined }}>
           <Button variant="ghost" size="icon" asChild aria-label="Home">
@@ -822,7 +877,10 @@ export default function ReaderPage() {
         </div>
       </header>
 
-      <main className={cn("mx-auto max-w-lg px-4", immersive ? "px-5 sm:px-6 py-6 pb-28" : "py-5", !immersive && "pb-64")}>
+      <main
+        className={cn("mx-auto max-w-lg px-4", immersive ? "px-5 sm:px-6 py-6 pb-28" : "py-5", !immersive && "pb-64")}
+        onClick={immersive ? toggleChromeFromTap : undefined}
+      >
         {!immersive && (
           <div className="mb-4 flex justify-end">
             <div className="rounded-full border bg-background/90 backdrop-blur px-3 py-1 text-xs shadow-sm">
@@ -955,88 +1013,13 @@ export default function ReaderPage() {
       </main>
 
       {/* Keep the player mounted so audio continues when chrome is visually hidden. */}
-      <div
-        className="reader-player reader-chrome fixed left-0 right-0 z-30 border-t bg-background/95 backdrop-blur"
-        data-visible={showChrome ? "true" : "false"}
-        aria-hidden={!showChrome}
-      >
-        <div className="mx-auto max-w-lg px-4 py-3 space-y-2" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Now playing</p>
-              <p className="text-sm font-medium truncate">
-                {audio.currentAyah ? `${audio.currentAyah.surahNameEnglish ?? "Surah"} · Ayah ${audio.currentAyah.ayahNumber}` : "—"}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => audio.playPage(ayahs)}
-                className="hidden sm:inline-flex"
-              >
-                <Volume2 className="h-4 w-4 mr-2" />
-                Play page
-              </Button>
-              <Select value={audio.reciterId} onValueChange={audio.setReciterId}>
-                <SelectTrigger className="h-9 w-[170px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {audio.RECITERS.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="icon" onClick={audio.prev} aria-label="Previous ayah">
-              <SkipBack className="h-5 w-5" />
-            </Button>
-            <Button
-              size="icon"
-              onClick={() => {
-                if (!audio.currentAyah) audio.playPage(ayahs);
-                else audio.toggle();
-                revealChrome();
-              }}
-              aria-label={audio.isPlaying ? "Pause" : "Play"}
-            >
-              {audio.isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-            </Button>
-            <Button variant="outline" size="icon" onClick={audio.next} aria-label="Next ayah">
-              <SkipForward className="h-5 w-5" />
-            </Button>
-
-            <div className="min-w-0 flex-1">
-              <input
-                type="range"
-                min={0}
-                max={Math.max(1, audio.duration || 1)}
-                value={Math.min(audio.currentTime, audio.duration || 0)}
-                onChange={(e) => audio.seek(parseFloat(e.target.value))}
-                aria-label="Seek audio position"
-                title="Seek audio position"
-                className="w-full accent-[hsl(var(--primary))]"
-              />
-              <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
-                <span>{audio.formattedTime}</span>
-                <span>{audio.formattedDuration}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-2">
-            <Button variant="ghost" size="sm" onClick={() => audio.playPage(ayahs)} className="sm:hidden">
-              <Volume2 className="h-4 w-4 mr-2" />
-              Play page
-            </Button>
-            <p className="min-w-0 flex-1 text-[11px] text-muted-foreground">
-              {immersive ? "Tap empty space to hide controls. Audio keeps playing." : "Tap any ayah to play it."}
-            </p>
-          </div>
-        </div>
-      </div>
+      <ReaderAudioBar
+        audio={audio}
+        ayahs={ayahs}
+        showChrome={showChrome}
+        immersive={immersive}
+        onReveal={revealChrome}
+      />
     </div>
   );
 }

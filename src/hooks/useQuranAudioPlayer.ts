@@ -29,6 +29,8 @@ export function useQuranAudioPlayer() {
   const queueRef = useRef<AyahRef[]>([]);
   const idxRef = useRef<number>(-1);
   const modeRef = useRef<PlaybackMode>("ayah");
+  const timeRafRef = useRef<number | null>(null);
+  const pendingTimeRef = useRef(0);
 
   const [reciterId, setReciterId] = useState<string>(RECITERS[0]?.id ?? "");
   const reciter: Reciter = useMemo(() => RECITERS.find((r) => r.id === reciterId) ?? RECITERS[0], [reciterId]);
@@ -143,10 +145,19 @@ export function useQuranAudioPlayer() {
     await playRef(q[prevIdx]);
   }, [playRef]);
 
-  // Attach listeners once
+  // Attach listeners once. Throttle timeupdate via rAF — Safari janks hard if every
+  // timeupdate setState re-renders the full Quran reader tree.
   useEffect(() => {
     const a = ensureAudio();
-    const onTime = () => setCurrentTime(a.currentTime || 0);
+    const flushTime = () => {
+      timeRafRef.current = null;
+      setCurrentTime(pendingTimeRef.current);
+    };
+    const onTime = () => {
+      pendingTimeRef.current = a.currentTime || 0;
+      if (timeRafRef.current != null) return;
+      timeRafRef.current = window.requestAnimationFrame(flushTime);
+    };
     const onDur = () => setDuration(a.duration || 0);
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
@@ -180,6 +191,7 @@ export function useQuranAudioPlayer() {
       a.removeEventListener("play", onPlay);
       a.removeEventListener("pause", onPause);
       a.removeEventListener("ended", onEnded);
+      if (timeRafRef.current != null) window.cancelAnimationFrame(timeRafRef.current);
       a.pause();
       a.src = "";
     };
@@ -217,4 +229,3 @@ export function useQuranAudioPlayer() {
     seek,
   };
 }
-

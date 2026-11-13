@@ -66,6 +66,11 @@ html { scroll-behavior: smooth; }
 /* iPhone browser chrome, home indicator, and narrow layouts. */
 html { -webkit-text-size-adjust: 100%; }
 body { min-width: 0; overflow-wrap: break-word; }
+
+/* Remove legacy 300ms tap delay on iOS Safari; keep scrolling intact. */
+a, button, [role="button"], input, select, textarea, label {
+  touch-action: manipulation;
+}
 .app-shell { padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px)); }
 .app-bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .reader-player { bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); }
@@ -105,14 +110,26 @@ html.reader-immersive .reader-player {
   bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/*
+ * Safari hit-testing: opacity:0 + pointer-events:none is NOT enough when
+ * backdrop-filter is present — WebKit can still intercept taps on the layer.
+ * Use visibility + inert-friendly hiding, drop backdrop-filter while hidden,
+ * and move fixed chrome off-screen so it cannot steal touches.
+ */
 .reader-chrome {
-  transition: opacity 180ms ease, transform 180ms ease;
+  transition: opacity 160ms ease, transform 160ms ease, visibility 160ms ease;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 .reader-chrome[data-visible="false"] {
   opacity: 0;
-  pointer-events: none;
-  transform: translateY(-4px);
+  visibility: hidden;
+  pointer-events: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  transform: translateY(-6px);
 }
 .reader-chrome.reader-player[data-visible="false"] {
-  transform: translateY(8px);
+  /* Fully leave the viewport so Safari cannot hit-test the compositor layer. */
+  transform: translate3d(0, 110%, 0);
 }
