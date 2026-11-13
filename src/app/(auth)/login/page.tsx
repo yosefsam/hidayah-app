@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { safeAuthNextPath } from "@/lib/site-url";
 import { motion } from "framer-motion";
 import { normalizeAuthEmail } from "@/lib/auth/email";
@@ -14,14 +14,14 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { HidayahLogo } from "@/components/brand/hidayah-logo";
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const setDemoMode = useAppStore((s) => s.setDemoMode);
+  const authError = searchParams.get("error");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,9 +33,6 @@ export default function LoginPage() {
       setError("Please enter your email and password.");
       return;
     }
-
-    // Debug: confirm values are present (never log raw password in shared/production builds).
-    console.log("Attempting login:", emailNormalized, passwordValue ? `(password length: ${passwordValue.length})` : "(no password)");
 
     let supabase;
     try {
@@ -54,46 +51,45 @@ export default function LoginPage() {
       password: passwordValue,
     });
 
-    setLoading(false);
-
     if (signInError) {
+      setLoading(false);
       console.error("[Login] signInWithPassword failed:", signInError);
       setError(signInError.message);
       return;
     }
 
-    console.log("[Login] success:", {
-      userId: data.user?.id,
-      email: data.user?.email,
-      hasSession: Boolean(data.session),
-    });
+    if (!data.session) {
+      setLoading(false);
+      setError("Sign-in succeeded but no session was created. Please try again.");
+      return;
+    }
 
     setDemoMode(false);
     const next = safeAuthNextPath(searchParams.get("next"), "/dashboard");
-    router.push(next);
-    router.refresh();
+    // Full navigation so Safari reliably sends freshly written auth cookies to middleware.
+    window.location.assign(next);
   }
 
   return (
-    <div className="dark min-h-screen flex flex-col items-center justify-center p-4 bg-[hsl(24_10%_6%)] text-zinc-100 antialiased">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background text-foreground antialiased">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm">
         <div className="mb-8 flex justify-center">
-          <HidayahLogo size="md" tone="onDark" />
+          <HidayahLogo size="md" tone="auto" />
         </div>
-        <Card className="border-white/10 bg-zinc-900/50 backdrop-blur shadow-xl">
+        <Card className="border shadow-xl bg-card">
           <CardHeader className="text-center">
-            <CardTitle className="text-xl text-zinc-100">Welcome back</CardTitle>
-            <CardDescription className="text-zinc-400">Sign in to continue your reading journey</CardDescription>
+            <CardTitle className="text-xl">Welcome back</CardTitle>
+            <CardDescription>Sign in to continue your reading journey</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
-              {error && (
-                <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg p-3">{error}</p>
+              {(error || authError === "auth") && (
+                <p className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+                  {error ?? "Authentication failed. Please sign in again."}
+                </p>
               )}
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-zinc-200">
-                  Email
-                </Label>
+                <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
@@ -102,13 +98,10 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
-                  className="border-white/10 bg-zinc-950/50 text-zinc-100"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-zinc-200">
-                  Password
-                </Label>
+                <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   type="password"
@@ -116,27 +109,21 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="border-white/10 bg-zinc-950/50 text-zinc-100"
                 />
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button
-                type="submit"
-                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white"
-                size="lg"
-                disabled={loading}
-              >
+              <Button type="submit" className="w-full" size="lg" disabled={loading}>
                 {loading ? "Signing in…" : "Sign in"}
               </Button>
-              <p className="text-sm text-zinc-500 text-center">
-                <Link href="/forgot-password" className="text-emerald-400 font-medium hover:underline">
+              <p className="text-sm text-muted-foreground text-center">
+                <Link href="/forgot-password" className="text-primary font-medium hover:underline">
                   Forgot password?
                 </Link>
               </p>
-              <p className="text-sm text-zinc-500 text-center">
+              <p className="text-sm text-muted-foreground text-center">
                 Don&apos;t have an account?{" "}
-                <Link href="/signup" className="text-emerald-400 font-medium hover:underline">
+                <Link href="/signup" className="text-primary font-medium hover:underline">
                   Sign up
                 </Link>
               </p>
@@ -144,11 +131,25 @@ export default function LoginPage() {
           </form>
         </Card>
         <p className="text-center mt-6">
-          <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
+          <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
             ← Back to home
           </Link>
         </p>
       </motion.div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

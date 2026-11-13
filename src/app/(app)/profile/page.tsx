@@ -112,8 +112,13 @@ export default function ProfilePage() {
             <CardDescription>Customize your reading experience</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="focus-mode">Focus mode</Label>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label htmlFor="focus-mode">Distraction-free reading</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Opens the reader full-screen. Tap the page to show or hide controls.
+                </p>
+              </div>
               <Switch id="focus-mode" checked={readerPreferences.focusMode} onCheckedChange={(checked) => setReaderPreferences({ focusMode: checked })} />
             </div>
             <div className="flex items-center justify-between">
@@ -165,8 +170,11 @@ export default function ProfilePage() {
 
       <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
         <Card>
-          <CardHeader><CardTitle className="text-base flex items-center gap-2"><Palette className="h-4 w-4" />Appearance</CardTitle><CardDescription>Light or dark</CardDescription></CardHeader>
-          <CardContent>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2"><Palette className="h-4 w-4" />Appearance</CardTitle>
+            <CardDescription>Light, dark, or match your device</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
             <Select value={theme} onValueChange={(v: "light" | "dark" | "system") => setTheme(v)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -175,6 +183,9 @@ export default function ProfilePage() {
                 <SelectItem value="system">System</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              System follows your device setting. Your choice is remembered on this device.
+            </p>
           </CardContent>
         </Card>
       </motion.section>

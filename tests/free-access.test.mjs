@@ -27,6 +27,21 @@ function middlewareFor(user) {
       resolveSupabasePublicEnv: () => ({ url: "https://example.supabase.co", publicKey: "test" }),
       isLikelySupabaseProjectMismatch: () => false,
     },
+    "@/lib/supabase/cookie-options": {
+      withSupabaseAuthCookieOptions: (options, secure) => ({
+        path: "/",
+        sameSite: "lax",
+        secure: secure ?? true,
+        maxAge: 400,
+        ...options,
+      }),
+      supabaseAuthCookieOptions: (secure) => ({
+        path: "/",
+        sameSite: "lax",
+        secure: secure ?? true,
+        maxAge: 400,
+      }),
+    },
     "@supabase/ssr": {
       createServerClient: (_url, _key, { cookies }) => ({
         auth: { getUser: async () => {

@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { DEMO_COOKIE_NAME } from "@/lib/demo-cookie";
 import { isLikelySupabaseProjectMismatch, resolveSupabasePublicEnv } from "@/lib/supabase/env";
+import { withSupabaseAuthCookieOptions } from "@/lib/supabase/cookie-options";
 
 const PROTECTED_PREFIXES = [
   "/dashboard",
@@ -16,6 +17,9 @@ const PROTECTED_PREFIXES = [
  * `supabase.auth.getUser()` refreshes the session via `setAll`, which writes cookies on
  * `sessionResponse`. Returning a bare `NextResponse.redirect()` drops those Set-Cookie headers,
  * so the browser keeps expired tokens and the next navigation looks logged out.
+ *
+ * Always preserve full cookie attributes (path, SameSite, Secure, Max-Age). Safari is stricter
+ * than Chrome when attributes are missing on redirect Set-Cookie headers.
  */
 function redirectPreservingSupabaseSession(sessionResponse: NextResponse, url: URL): NextResponse {
   const redirect = NextResponse.redirect(url);
@@ -25,8 +29,9 @@ function redirectPreservingSupabaseSession(sessionResponse: NextResponse, url: U
     redirect.headers.append("Set-Cookie", cookie);
   }
   if (serialized.length === 0) {
+    const secure = url.protocol === "https:";
     sessionResponse.cookies.getAll().forEach(({ name, value }) => {
-      redirect.cookies.set(name, value);
+      redirect.cookies.set(name, value, withSupabaseAuthCookieOptions(undefined, secure));
     });
   }
   return redirect;
@@ -38,6 +43,7 @@ function isProtectedPath(pathname: string): boolean {
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+  const secure = request.nextUrl.protocol === "https:";
 
   const { url, publicKey: key } = resolveSupabasePublicEnv();
 
@@ -56,7 +62,9 @@ export async function updateSession(request: NextRequest) {
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         supabaseResponse = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options));
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, withSupabaseAuthCookieOptions(options as never, secure))
+        );
       },
     },
   });

@@ -7,7 +7,7 @@ This app uses **Supabase Auth** only—no custom email sending in Next.js. Confi
 | Flow | Parameter | Full redirect target (production) |
 |------|-----------|-------------------------------------|
 | **Signup confirmation** | `emailRedirectTo` | `https://hidayah.io/auth/callback?next=/onboarding` |
-| **Forgot password** | `redirectTo` | `https://hidayah.io/auth/callback?next=/update-password` |
+| **Forgot password** | `redirectTo` | `https://hidayah.io/auth/callback?next=/reset-password` |
 | **Auth callback** (server) | — | `GET /auth/callback` exchanges `code` for session, then redirects to `next` (sanitized). |
 
 Requirements:
@@ -35,7 +35,7 @@ Wildcard `https://hidayah.io/**` covers:
 
 - `https://hidayah.io/auth/callback`
 - `https://hidayah.io/auth/callback?next=/onboarding`
-- `https://hidayah.io/auth/callback?next=/update-password`
+- `https://hidayah.io/auth/callback?next=/reset-password`
 - `https://hidayah.io/auth/callback?next=/dashboard` (e.g. deep links)
 
 If your Supabase project does not support `**`, add explicit URLs for each `next` value you use.
@@ -88,7 +88,7 @@ SMTP is **not** configured via Next.js env vars; it is configured in **Supabase*
 ### Forgot password email
 
 - [ ] From **/forgot-password**, submit email.
-- [ ] Link should hit **`/auth/callback`** then redirect to **`/update-password`**.
+- [ ] Link should hit **`/auth/callback`** then redirect to **`/reset-password`**.
 - [ ] Submit new password; should land on **`/dashboard`** after `updateUser`.
 
 ### Login redirect behavior

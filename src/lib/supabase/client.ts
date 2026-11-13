@@ -1,5 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { isLikelySupabaseProjectMismatch, resolveSupabasePublicEnv } from "@/lib/supabase/env";
+import { supabaseAuthCookieOptions } from "@/lib/supabase/cookie-options";
 
 /**
  * Thrown when NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are missing.
@@ -18,6 +19,8 @@ let browserClient: ReturnType<typeof createBrowserClient> | undefined;
 
 /**
  * Browser Supabase client (singleton). Always returns a valid client or throws — never null.
+ * Uses first-party cookie storage (PKCE) with explicit SameSite=Lax + Secure on HTTPS so
+ * Safari persists the session after sign-in / soft navigations.
  */
 export function createClient(): ReturnType<typeof createBrowserClient> {
   const { url, publicKey: key } = resolveSupabasePublicEnv();
@@ -41,7 +44,9 @@ export function createClient(): ReturnType<typeof createBrowserClient> {
   }
 
   if (!browserClient) {
-    browserClient = createBrowserClient(url, key);
+    browserClient = createBrowserClient(url, key, {
+      cookieOptions: supabaseAuthCookieOptions(),
+    });
   }
   return browserClient;
 }

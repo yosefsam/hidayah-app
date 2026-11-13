@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { normalizeAuthEmail } from "@/lib/auth/email";
 import { createClient, SupabaseEnvError } from "@/lib/supabase/client";
 import { getAuthSiteUrl } from "@/lib/site-url";
+import { useAppStore } from "@/store/useAppStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,13 +18,20 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [checkEmail, setCheckEmail] = useState(false);
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
+  const setDemoMode = useAppStore((s) => s.setDemoMode);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (password !== confirmPassword) { setError("Passwords do not match"); return; }
-    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
     let supabase;
     try {
       supabase = createClient();
@@ -40,17 +47,58 @@ export default function SignUpPage() {
       setError("Please enter a valid email.");
       return;
     }
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email: emailNormalized,
       password,
       options: {
         emailRedirectTo: `${getAuthSiteUrl()}/auth/callback?next=/onboarding`,
       },
     });
-    setLoading(false);
-    if (signUpError) { setError(signUpError.message); return; }
-    router.push("/onboarding");
-    router.refresh();
+    if (signUpError) {
+      setLoading(false);
+      setError(signUpError.message);
+      return;
+    }
+
+    setDemoMode(false);
+
+    // Email confirmation required — no session yet. Do not push to protected /onboarding.
+    if (!data.session) {
+      setLoading(false);
+      setCheckEmail(true);
+      return;
+    }
+
+    // Full navigation so Safari reliably sends freshly written auth cookies.
+    window.location.assign("/onboarding");
+  }
+
+  if (checkEmail) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-background">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-sm text-center space-y-4"
+        >
+          <HidayahLogo size="md" tone="auto" />
+          <Card className="border-0 shadow-lg text-left">
+            <CardHeader>
+              <CardTitle className="text-xl">Check your email</CardTitle>
+              <CardDescription>
+                We sent a confirmation link to <span className="font-medium text-foreground">{email.trim()}</span>.
+                Open it on this device to finish creating your account.
+              </CardDescription>
+            </CardHeader>
+            <CardFooter className="flex flex-col gap-3">
+              <Button asChild className="w-full" variant="outline">
+                <Link href="/login">Back to sign in</Link>
+              </Button>
+            </CardFooter>
+          </Card>
+        </motion.div>
+      </div>
+    );
   }
 
   return (

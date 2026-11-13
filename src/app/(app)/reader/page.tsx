@@ -117,10 +117,16 @@ export default function ReaderPage() {
   function setPageWithoutReward(nextPage: number) {
     const p = clampPage(nextPage);
     const fromPage = page;
-    if (p === fromPage) return;
+    if (p === fromPage) {
+      setStreamStart(p);
+      setStreamEnd(p);
+      return;
+    }
     void (async () => {
       setDirection(p >= fromPage ? 1 : -1);
       setPage(p);
+      setStreamStart(p);
+      setStreamEnd(p);
       markVisited(p);
       minPageRef.current = Math.min(minPageRef.current, p);
       maxPageRef.current = Math.max(maxPageRef.current, p);
@@ -422,17 +428,190 @@ export default function ReaderPage() {
   const totalHasanatDisplay = sessionsTotalHasanat + liveEarnedHasanat;
 
   const audio = useQuranAudioPlayer();
+  const immersive = readerPreferences.focusMode;
+  const [chromeVisible, setChromeVisible] = useState(!immersive);
+  const chromeHideTimerRef = useRef<number | null>(null);
+  const tapGuardRef = useRef(false);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const [streamStart, setStreamStart] = useState(initialPage);
+  const [streamEnd, setStreamEnd] = useState(initialPage);
+  const continuous = immersive;
+
+  // Enter distraction-free reading by default whenever the reader opens.
+  useEffect(() => {
+    if (!readerPreferences.focusMode) {
+      setReaderPreferences({ focusMode: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("reader-immersive", immersive);
+    return () => {
+      document.documentElement.classList.remove("reader-immersive");
+    };
+  }, [immersive]);
+
+  useEffect(() => {
+    setChromeVisible(!immersive);
+  }, [immersive]);
+
+  useEffect(() => {
+    if (!immersive || !chromeVisible) return;
+    if (chromeHideTimerRef.current) window.clearTimeout(chromeHideTimerRef.current);
+    chromeHideTimerRef.current = window.setTimeout(() => setChromeVisible(false), 3500);
+    return () => {
+      if (chromeHideTimerRef.current) window.clearTimeout(chromeHideTimerRef.current);
+    };
+  }, [immersive, chromeVisible, page, audio.isPlaying]);
+
+  function resetStreamTo(p: number) {
+    const clamped = clampPage(p);
+    setStreamStart(clamped);
+    setStreamEnd(clamped);
+  }
+
+  // Continuous vertical reading: append the next mushaf page as the user nears the bottom.
+  useEffect(() => {
+    if (!continuous) return;
+    const el = loadMoreSentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return;
+        const next = clampPage(streamEnd + 1);
+        if (next <= streamEnd) return;
+        goToPage(next, 1);
+        setStreamEnd(next);
+      },
+      { rootMargin: "320px 0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [continuous, streamEnd, pagesData]);
+
+  function revealChrome() {
+    setChromeVisible(true);
+  }
+
+  function toggleChromeFromTap(e: React.MouseEvent | React.TouchEvent) {
+    if (!immersive) return;
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    // Don't steal taps from interactive controls or ayah play buttons.
+    if (target.closest("button, a, input, select, textarea, [role='button'], [data-ayah-key]")) return;
+    if (tapGuardRef.current) return;
+    tapGuardRef.current = true;
+    window.setTimeout(() => {
+      tapGuardRef.current = false;
+    }, 280);
+    setChromeVisible((v) => !v);
+  }
+
+  const streamPages = useMemo(() => {
+    if (!continuous) return [page];
+    const start = Math.max(1, Math.min(streamStart, streamEnd));
+    const end = Math.max(start, streamEnd);
+    const list: number[] = [];
+    for (let p = start; p <= end; p++) list.push(p);
+    // Keep a bounded window so the DOM stays light while scrolling far.
+    if (list.length > 10) {
+      const trimmed = list.slice(list.length - 10);
+      return trimmed;
+    }
+    return list;
+  }, [continuous, page, streamStart, streamEnd]);
+
+  function renderAyahsForPage(pageNumber: number, pageAyahs: QuranAyah[], translations: Record<string, string>) {
+    return pageAyahs.map((a, idx) => {
+      const prev = pageAyahs[idx - 1];
+      const startsNewSurah = idx === 0 ? true : a.surahNumber !== prev?.surahNumber;
+      const playing = audio.currentAyahKey === `${a.surahNumber}:${a.ayahNumber}`;
+      const verseKey = `${a.surahNumber}:${a.ayahNumber}`;
+      const line = translations[verseKey] ?? null;
+      return (
+        <span key={`${pageNumber}-${a.surahNumber}-${a.ayahNumber}-${idx}`} className="block">
+          {startsNewSurah && a.surahNumber ? (
+            <span dir="ltr" className="block my-5 text-center">
+              <span className="inline-flex items-center gap-3">
+                <span className="h-px w-10 bg-border" />
+                <span>
+                  <span className="block text-xs font-medium tracking-wide">{a.surahNameEnglish}</span>
+                  <span className="block text-[11px] text-muted-foreground font-arabic" dir="rtl">{a.surahNameArabic}</span>
+                </span>
+                <span className="h-px w-10 bg-border" />
+              </span>
+            </span>
+          ) : null}
+
+          <span
+            data-ayah-key={`${a.surahNumber}:${a.ayahNumber}`}
+            onClick={() => {
+              audio.playAyah({
+                surahNumber: a.surahNumber,
+                ayahNumber: a.ayahNumber,
+                surahNameEnglish: a.surahNameEnglish,
+                surahNameArabic: a.surahNameArabic,
+                text: a.text,
+              });
+              if (immersive) revealChrome();
+            }}
+            className={cn(
+              "cursor-pointer rounded-md px-1 -mx-1 transition-colors",
+              playing ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-muted/40",
+              highlightTarget && highlightTarget.surah === a.surahNumber && highlightTarget.ayah === a.ayahNumber
+                ? "bg-primary/10 ring-1 ring-primary/20"
+                : ""
+            )}
+            role="button"
+            tabIndex={0}
+          >
+            <span>{a.text}</span>
+            {a.ayahNumber ? <AyahMarker n={a.ayahNumber} /> : null}
+          </span>
+          {readerPreferences.showTranslation ? (
+            <span dir="ltr" className="mt-1 block pl-1 text-[13px] leading-6 font-sans text-muted-foreground/95">
+              <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                Translation
+              </span>
+              {line ?? (a.ayahNumber ? "—" : "")}
+            </span>
+          ) : null}
+        </span>
+      );
+    });
+  }
+
+  const showChrome = !immersive || chromeVisible;
 
   return (
-    <div className={cn("min-h-[calc(100vh-4rem)] supports-[height:100dvh]:min-h-[calc(100dvh-4rem)]", readerPreferences.focusMode ? "bg-background" : "bg-background")}>
-      <header className={cn("reader-toolbar sticky z-20 border-b bg-background/85 backdrop-blur", readerPreferences.focusMode && "border-transparent")}>
-        <div className="mx-auto max-w-lg px-4 py-3 flex items-center gap-3">
+    <div
+      className={cn(
+        "bg-background",
+        immersive
+          ? "min-h-[100dvh] supports-[height:100dvh]:min-h-dvh"
+          : "min-h-[calc(100vh-4rem)] supports-[height:100dvh]:min-h-[calc(100dvh-4rem)]"
+      )}
+      onClick={toggleChromeFromTap}
+    >
+      <header
+        className={cn(
+          "reader-toolbar reader-chrome sticky z-20 border-b bg-background/90 backdrop-blur",
+          immersive && "border-transparent bg-background/80"
+        )}
+        data-visible={showChrome ? "true" : "false"}
+      >
+        <div className="mx-auto max-w-lg px-4 py-3 flex items-center gap-3" style={{ paddingTop: immersive ? "max(0.75rem, env(safe-area-inset-top))" : undefined }}>
           <Button variant="ghost" size="icon" asChild aria-label="Home">
             <Link href="/dashboard"><Home className="h-5 w-5" /></Link>
           </Button>
           <button
             type="button"
-            onClick={() => setNavOpen(true)}
+            onClick={() => {
+              setNavOpen(true);
+              revealChrome();
+            }}
             className="min-w-0 flex-1 text-left rounded-lg px-2 py-1 -mx-2 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Open navigation picker"
           >
@@ -446,210 +625,205 @@ export default function ReaderPage() {
             </div>
           </button>
 
-          {!readerPreferences.focusMode && (
-            <Button variant="ghost" size="icon" onClick={() => toggleBookmark(page)} aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}>
-              {isBookmarked ? <BookmarkCheck className="h-5 w-5 text-primary" /> : <Bookmark className="h-5 w-5" />}
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              toggleBookmark(page);
+              revealChrome();
+            }}
+            aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
+          >
+            {isBookmarked ? <BookmarkCheck className="h-5 w-5 text-primary" /> : <Bookmark className="h-5 w-5" />}
+          </Button>
 
+          <Dialog open={navOpen} onOpenChange={(open) => { setNavOpen(open); if (open) revealChrome(); }}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Reader settings and jump">
+                <Settings2 className="h-5 w-5" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Reader</DialogTitle>
+              </DialogHeader>
 
-          {!readerPreferences.focusMode && (
-            <Dialog open={navOpen} onOpenChange={setNavOpen}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Reader settings and jump">
-                  <Settings2 className="h-5 w-5" />
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg">
-                <DialogHeader>
-                  <DialogTitle>Reader</DialogTitle>
-                </DialogHeader>
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Start reading from</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setHighlightTarget(null);
+                          setPageWithoutReward(1);
+                          resetStreamTo(1);
+                          setNavOpen(false);
+                        }}
+                      >
+                        First page
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const p = clampPage(lastReadPosition?.page ?? page);
+                          setHighlightTarget(null);
+                          setPageWithoutReward(p);
+                          resetStreamTo(p);
+                          setNavOpen(false);
+                        }}
+                      >
+                        Last read
+                      </Button>
+                    </div>
+                  </div>
 
-                <div className="space-y-5">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Start reading from</Label>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setHighlightTarget(null);
-                            setPageWithoutReward(1);
-                            setNavOpen(false);
-                          }}
-                        >
-                          First page
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            const p = clampPage(lastReadPosition?.page ?? page);
-                            setHighlightTarget(null);
-                            setPageWithoutReward(p);
-                            setNavOpen(false);
-                          }}
-                        >
-                          Last read
-                        </Button>
+                  <Tabs value={startTab} onValueChange={(v) => setStartTab(v as any)} className="w-full">
+                    <TabsList className="grid grid-cols-3 w-full">
+                      <TabsTrigger value="surah">Surah</TabsTrigger>
+                      <TabsTrigger value="page">Page</TabsTrigger>
+                      <TabsTrigger value="juz">Juz</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="surah" className="mt-3 space-y-3">
+                      <div className="space-y-2">
+                        <Label>Search surah</Label>
+                        <Input value={surahSearch} onChange={(e) => setSurahSearch(e.target.value)} placeholder="Type a surah name or number…" />
                       </div>
-                    </div>
-
-                    <Tabs value={startTab} onValueChange={(v) => setStartTab(v as any)} className="w-full">
-                      <TabsList className="grid grid-cols-3 w-full">
-                        <TabsTrigger value="surah">Surah</TabsTrigger>
-                        <TabsTrigger value="page">Page</TabsTrigger>
-                        <TabsTrigger value="juz">Juz</TabsTrigger>
-                      </TabsList>
-
-                      <TabsContent value="surah" className="mt-3 space-y-3">
-                        <div className="space-y-2">
-                          <Label>Search surah</Label>
-                          <Input value={surahSearch} onChange={(e) => setSurahSearch(e.target.value)} placeholder="Type a surah name or number…" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Surah</Label>
-                          <div className="rounded-lg border">
-                            <ScrollArea className="h-44">
-                              <div className="p-2 space-y-1">
-                                {filteredSurahs.map((s) => (
-                                  <button
-                                    key={s.number}
-                                    type="button"
-                                    onClick={() => setSelectedSurah(s.number)}
-                                    className={cn(
-                                      "w-full text-left rounded-md px-3 py-2 text-sm transition-colors",
-                                      selectedSurah === s.number ? "bg-primary/10 text-primary" : "hover:bg-muted"
-                                    )}
-                                  >
-                                    <span className="font-medium">{s.number}. {s.nameEnglish}</span>{" "}
-                                    <span className="text-muted-foreground font-arabic" dir="rtl">({s.nameArabic})</span>
-                                  </button>
-                                ))}
-                              </div>
-                            </ScrollArea>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Ayah (optional)</Label>
-                          <Input
-                            inputMode="numeric"
-                            value={selectedAyah}
-                            onChange={(e) => setSelectedAyah(e.target.value.replace(/[^\d]/g, ""))}
-                            placeholder={`e.g. 1 (max ${surahAyahCount.get(selectedSurah) ?? "—"})`}
-                          />
-                          <p className="text-xs text-muted-foreground">Leave blank to start at the beginning of the surah.</p>
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="page" className="mt-3 space-y-3">
-                        <div className="space-y-2">
-                          <Label>Page</Label>
-                          <Input inputMode="numeric" value={pageJump} onChange={(e) => setPageJump(e.target.value.replace(/[^\d]/g, ""))} placeholder={`1–${MUSHAF_PAGE_COUNT}`} />
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="juz" className="mt-3 space-y-3">
-                        <div className="space-y-2">
-                          <Label>Juz</Label>
-                          <Select value={juzJump} onValueChange={setJuzJump}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {Array.from({ length: 30 }, (_, i) => String(i + 1)).map((j) => (
-                                <SelectItem key={j} value={j}>Juz {j}</SelectItem>
+                      <div className="space-y-2">
+                        <Label>Surah</Label>
+                        <div className="rounded-lg border">
+                          <ScrollArea className="h-44">
+                            <div className="p-2 space-y-1">
+                              {filteredSurahs.map((s) => (
+                                <button
+                                  key={s.number}
+                                  type="button"
+                                  onClick={() => setSelectedSurah(s.number)}
+                                  className={cn(
+                                    "w-full text-left rounded-md px-3 py-2 text-sm transition-colors",
+                                    selectedSurah === s.number ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                                  )}
+                                >
+                                  <span className="font-medium">{s.number}. {s.nameEnglish}</span>{" "}
+                                  <span className="text-muted-foreground font-arabic" dir="rtl">({s.nameArabic})</span>
+                                </button>
                               ))}
-                            </SelectContent>
-                          </Select>
+                            </div>
+                          </ScrollArea>
                         </div>
-                      </TabsContent>
-                    </Tabs>
+                      </div>
 
-                    <div className="space-y-2">
-                      <Label>Direct input</Label>
-                      <Input
-                        value={directInput}
-                        onChange={(e) => setDirectInput(e.target.value)}
-                        placeholder="e.g. 2:255 (Surah:Ayah) or 18 (Page)"
-                      />
-                      <p className="text-xs text-muted-foreground">Use this for quick jumps without opening multiple pickers.</p>
-                    </div>
+                      <div className="space-y-2">
+                        <Label>Ayah (optional)</Label>
+                        <Input
+                          inputMode="numeric"
+                          value={selectedAyah}
+                          onChange={(e) => setSelectedAyah(e.target.value.replace(/[^\d]/g, ""))}
+                          placeholder={`e.g. 1 (max ${surahAyahCount.get(selectedSurah) ?? "—"})`}
+                        />
+                        <p className="text-xs text-muted-foreground">Leave blank to start at the beginning of the surah.</p>
+                      </div>
+                    </TabsContent>
 
-                    <Button type="button" size="lg" className="w-full" onClick={jumpToReadingPosition}>
-                      Go to reading position
-                    </Button>
+                    <TabsContent value="page" className="mt-3 space-y-3">
+                      <div className="space-y-2">
+                        <Label>Page</Label>
+                        <Input inputMode="numeric" value={pageJump} onChange={(e) => setPageJump(e.target.value.replace(/[^\d]/g, ""))} placeholder={`1–${MUSHAF_PAGE_COUNT}`} />
+                      </div>
+                    </TabsContent>
 
-                    <p className="text-xs text-muted-foreground">
-                      Tip: if you jump to a specific ayah, the reader will open the correct page and briefly highlight it.
-                    </p>
-                  </div>
+                    <TabsContent value="juz" className="mt-3 space-y-3">
+                      <div className="space-y-2">
+                        <Label>Juz</Label>
+                        <Select value={juzJump} onValueChange={setJuzJump}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 30 }, (_, i) => String(i + 1)).map((j) => (
+                              <SelectItem key={j} value={j}>Juz {j}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
 
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <p className="text-sm font-medium">Focus mode</p>
-                      <p className="text-xs text-muted-foreground">Hide extra controls for an immersive read.</p>
-                    </div>
-                    <Switch checked={readerPreferences.focusMode} onCheckedChange={(checked) => setReaderPreferences({ focusMode: checked })} />
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div>
-                      <p className="text-sm font-medium">
-                        Translation
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Show a translation where available.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={readerPreferences.showTranslation}
-                      onCheckedChange={(checked) => {
-                        setReaderPreferences({ showTranslation: checked });
-                      }}
+                  <div className="space-y-2">
+                    <Label>Direct input</Label>
+                    <Input
+                      value={directInput}
+                      onChange={(e) => setDirectInput(e.target.value)}
+                      placeholder="e.g. 2:255 (Surah:Ayah) or 18 (Page)"
                     />
+                    <p className="text-xs text-muted-foreground">Use this for quick jumps without opening multiple pickers.</p>
                   </div>
 
-                  <div className="space-y-2 rounded-lg border p-3">
-                    <Label>Translation source</Label>
-                    <Select
-                      value={selectedTranslationKey}
-                      onValueChange={(value) => setReaderPreferences({ translationKey: value as TranslationKey })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TRANSLATION_OPTIONS.map((option) => (
-                          <SelectItem key={option.key} value={option.key}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Verified source: Quran.com translations.
-                    </p>
-                  </div>
-
-                  <div className="rounded-lg border p-3">
-                    <p className="text-sm font-medium">Hasanat estimate</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      This is a motivational estimate for reflection and consistency, not a definitive count.
-                    </p>
-                    <p className="text-sm mt-2">Approx. <span className="font-semibold">{formatHasanat(pageHasanatEstimate)}</span> per page in this MVP model.</p>
-                  </div>
+                  <Button type="button" size="lg" className="w-full" onClick={jumpToReadingPosition}>
+                    Go to reading position
+                  </Button>
                 </div>
-              </DialogContent>
-            </Dialog>
-          )}
+
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <p className="text-sm font-medium">Distraction-free reading</p>
+                    <p className="text-xs text-muted-foreground">Hide chrome for an immersive read. Tap the page to show controls.</p>
+                  </div>
+                  <Switch
+                    checked={readerPreferences.focusMode}
+                    onCheckedChange={(checked) => setReaderPreferences({ focusMode: checked })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div>
+                    <p className="text-sm font-medium">Translation</p>
+                    <p className="text-xs text-muted-foreground">Show a translation where available.</p>
+                  </div>
+                  <Switch
+                    checked={readerPreferences.showTranslation}
+                    onCheckedChange={(checked) => setReaderPreferences({ showTranslation: checked })}
+                  />
+                </div>
+
+                <div className="space-y-2 rounded-lg border p-3">
+                  <Label>Translation source</Label>
+                  <Select
+                    value={selectedTranslationKey}
+                    onValueChange={(value) => setReaderPreferences({ translationKey: value as TranslationKey })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TRANSLATION_OPTIONS.map((option) => (
+                        <SelectItem key={option.key} value={option.key}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="rounded-lg border p-3">
+                  <p className="text-sm font-medium">Hasanat estimate</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Motivational estimate for reflection and consistency, not a definitive count.
+                  </p>
+                  <p className="text-sm mt-2">Approx. <span className="font-semibold">{formatHasanat(pageHasanatEstimate)}</span> per page.</p>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </header>
 
-      <main className={cn("mx-auto max-w-lg px-4 py-5", !readerPreferences.focusMode ? "pb-64" : "pb-6")}>
-        {!readerPreferences.focusMode && (
+      <main className={cn("mx-auto max-w-lg px-4", immersive ? "px-5 sm:px-6 py-6 pb-28" : "py-5", !immersive && "pb-64")}>
+        {!immersive && (
           <div className="mb-4 flex justify-end">
             <div className="rounded-full border bg-background/90 backdrop-blur px-3 py-1 text-xs shadow-sm">
               <span className="text-muted-foreground">Hasanat (est.)</span>{" "}
@@ -666,7 +840,7 @@ export default function ReaderPage() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8, scale: 0.98 }}
               transition={{ type: "spring", stiffness: 300, damping: 24 }}
-              className="fixed top-36 right-4 z-40 md:right-[calc(50%-16rem)]"
+              className="fixed top-24 right-4 z-40 md:right-[calc(50%-16rem)]"
             >
               <div className="rounded-full bg-primary text-primary-foreground px-3 py-1 text-xs font-semibold shadow">
                 +{formatHasanat(earnedToast.amount)} est. hasanat
@@ -686,204 +860,183 @@ export default function ReaderPage() {
             <div className="flex items-center gap-3">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
               <div>
-                <p className="text-sm font-medium">Loading Quran pages…</p>
-                <p className="text-xs text-muted-foreground">Preparing a smooth, page-by-page mushaf experience.</p>
+                <p className="text-sm font-medium">Loading Quran…</p>
+                <p className="text-xs text-muted-foreground">Preparing a calm reading experience.</p>
               </div>
             </div>
           </div>
         )}
 
-        <div className={cn("mb-4 flex items-center justify-between", readerPreferences.focusMode && "opacity-0 pointer-events-none h-0 mb-0")}>
-          <Button variant="outline" onClick={() => goToPage(page - 1, -1)} disabled={page <= 1}>
-            <ChevronLeft className="h-4 w-4 mr-1" /> Prev
-          </Button>
-          <div className="text-xs text-muted-foreground">
-            Swipe to turn pages
+        {!immersive && (
+          <div className="mb-4 flex items-center justify-between">
+            <Button variant="outline" onClick={() => goToPage(page - 1, -1)} disabled={page <= 1}>
+              <ChevronLeft className="h-4 w-4 mr-1" /> Prev
+            </Button>
+            <div className="text-xs text-muted-foreground">Swipe to turn pages</div>
+            <Button variant="outline" onClick={() => goToPage(page + 1, 1)} disabled={page >= MUSHAF_PAGE_COUNT}>
+              Next <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
           </div>
-          <Button variant="outline" onClick={() => goToPage(page + 1, 1)} disabled={page >= MUSHAF_PAGE_COUNT}>
-            Next <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
+        )}
 
-        <AnimatePresence initial={false} custom={direction} mode="wait">
-          <motion.div
-            key={page}
-            custom={direction}
-            initial={{ opacity: 0, x: direction * 30, rotateY: direction * 6 }}
-            animate={{ opacity: 1, x: 0, rotateY: 0 }}
-            exit={{ opacity: 0, x: direction * -30, rotateY: direction * -6 }}
-            transition={{ type: "spring", stiffness: 280, damping: 26 }}
-          >
+        {continuous ? (
+          <div className="space-y-8">
+            {streamPages.map((p) => {
+              const pc = getRuntimePage(pagesData, p) ?? getPageContent(p);
+              const pageAyahs: QuranAyah[] =
+                pc.ayahs?.length
+                  ? pc.ayahs
+                  : (pc.arabic ?? []).map((text) => ({
+                      surahNumber: pc.surahNumber,
+                      surahNameArabic: pc.surahNameArabic,
+                      surahNameEnglish: pc.surahNameEnglish,
+                      ayahNumber: 0,
+                      text,
+                    }));
+              const translations = p === page ? pageTranslations : {};
+              return (
+                <section key={p} data-mushaf-page={p} className="scroll-mt-24">
+                  <div dir="rtl" className="font-arabic break-words text-right leading-[2.55] tracking-wide text-[23px] sm:text-[26px] text-foreground">
+                    {renderAyahsForPage(p, pageAyahs, translations)}
+                  </div>
+                  <p className="mt-6 text-center text-[11px] text-muted-foreground/70 tabular-nums" dir="ltr">
+                    {p}
+                  </p>
+                </section>
+              );
+            })}
+            {streamEnd < MUSHAF_PAGE_COUNT ? <div ref={loadMoreSentinelRef} className="h-8" aria-hidden /> : null}
+          </div>
+        ) : (
+          <AnimatePresence initial={false} custom={direction} mode="wait">
             <motion.div
-              drag="x"
-              style={{ touchAction: "pan-y" }}
-              dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.15}
-              onDragEnd={(_, info) => {
-                if (info.offset.x < -SWIPE_THRESHOLD) goToPage(page + 1, 1);
-                if (info.offset.x > SWIPE_THRESHOLD) goToPage(page - 1, -1);
-              }}
+              key={page}
+              custom={direction}
+              initial={{ opacity: 0, x: direction * 30, rotateY: direction * 6 }}
+              animate={{ opacity: 1, x: 0, rotateY: 0 }}
+              exit={{ opacity: 0, x: direction * -30, rotateY: direction * -6 }}
+              transition={{ type: "spring", stiffness: 280, damping: 26 }}
             >
-              <Card className={cn("p-5 sm:p-6 shadow-sm", readerPreferences.focusMode ? "border-transparent shadow-none" : "")}>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-xs text-muted-foreground truncate">
-                    {content.surahNumber ? `${content.surahNameEnglish} · ${content.surahNameArabic}` : "—"}
+              <motion.div
+                drag="x"
+                style={{ touchAction: "pan-y" }}
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.15}
+                onDragEnd={(_, info) => {
+                  if (info.offset.x < -SWIPE_THRESHOLD) goToPage(page + 1, 1);
+                  if (info.offset.x > SWIPE_THRESHOLD) goToPage(page - 1, -1);
+                }}
+              >
+                <Card className="p-5 sm:p-6 shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="text-xs text-muted-foreground truncate">
+                      {content.surahNumber ? `${content.surahNameEnglish} · ${content.surahNameArabic}` : "—"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Page {page}</div>
                   </div>
-                  <div className="text-xs text-muted-foreground">Page {page}</div>
-                </div>
-
-                <div className={cn("rounded-2xl border bg-card/50 p-4 sm:p-5", readerPreferences.focusMode && "border-transparent bg-transparent p-0")}>
-                  <div dir="rtl" className={cn("font-arabic break-words text-right leading-[2.35] tracking-wide", "text-[22px] sm:text-[24px]")}>
-                    {ayahs.map((a, idx) => {
-                      const prev = ayahs[idx - 1];
-                      const startsNewSurah = idx === 0 ? true : a.surahNumber !== prev?.surahNumber;
-                      const playing = audio.currentAyahKey === `${a.surahNumber}:${a.ayahNumber}`;
-                      const verseKey = `${a.surahNumber}:${a.ayahNumber}`;
-                      const line = pageTranslations[verseKey] ?? null;
-                      return (
-                        <span key={`${a.surahNumber}-${a.ayahNumber}-${idx}`} className="block">
-                          {startsNewSurah && a.surahNumber ? (
-                            <span dir="ltr" className="block my-4 text-center">
-                              <span className="inline-flex items-center gap-3">
-                                <span className="h-px w-10 bg-border" />
-                                <span>
-                                  <span className="block text-xs font-medium">{a.surahNameEnglish}</span>
-                                  <span className="block text-[11px] text-muted-foreground font-arabic" dir="rtl">{a.surahNameArabic}</span>
-                                </span>
-                                <span className="h-px w-10 bg-border" />
-                              </span>
-                            </span>
-                          ) : null}
-
-                          <span
-                            data-ayah-key={`${a.surahNumber}:${a.ayahNumber}`}
-                            onClick={() => {
-                              audio.playAyah({
-                                surahNumber: a.surahNumber,
-                                ayahNumber: a.ayahNumber,
-                                surahNameEnglish: a.surahNameEnglish,
-                                surahNameArabic: a.surahNameArabic,
-                                text: a.text,
-                              });
-                            }}
-                            className={cn(
-                              "cursor-pointer rounded-md px-1 -mx-1 transition-colors",
-                              playing ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-muted/40",
-                              highlightTarget && highlightTarget.surah === a.surahNumber && highlightTarget.ayah === a.ayahNumber
-                                ? "bg-primary/10 ring-1 ring-primary/20"
-                                : ""
-                            )}
-                            role="button"
-                            tabIndex={0}
-                          >
-                            <span>{a.text}</span>
-                            {a.ayahNumber ? <AyahMarker n={a.ayahNumber} /> : null}
-                          </span>
-                          {readerPreferences.showTranslation ? (
-                            <span dir="ltr" className="mt-1 block pl-1 text-[13px] leading-6 font-sans text-muted-foreground/95">
-                              <span className="mb-0.5 block text-[10px] uppercase tracking-wide text-muted-foreground/70">
-                                Translation
-                              </span>
-                              {line ?? (a.ayahNumber ? "—" : "")}
-                            </span>
-                          ) : null}
-                        </span>
-                      );
-                    })}
+                  <div className="rounded-2xl border bg-card/50 p-4 sm:p-5">
+                    <div dir="rtl" className="font-arabic break-words text-right leading-[2.35] tracking-wide text-[22px] sm:text-[24px]">
+                      {renderAyahsForPage(page, ayahs, pageTranslations)}
+                    </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        </AnimatePresence>
+          </AnimatePresence>
+        )}
 
-        <div className={cn("mt-4 rounded-lg border bg-muted/30 p-3", readerPreferences.focusMode && "opacity-0 pointer-events-none h-0 mt-0 p-0 border-0")}>
-          <p className="text-xs text-muted-foreground">
-            Hasanat shown here are motivational estimates for reflection and consistency, not a definitive count.
-          </p>
-        </div>
+        {!immersive && (
+          <div className="mt-4 rounded-lg border bg-muted/30 p-3">
+            <p className="text-xs text-muted-foreground">
+              Hasanat shown here are motivational estimates for reflection and consistency, not a definitive count.
+            </p>
+          </div>
+        )}
       </main>
 
-      {!readerPreferences.focusMode && (
-        <div className="reader-player fixed left-0 right-0 z-30 border-t bg-background/90 backdrop-blur">
-          <div className="mx-auto max-w-lg px-4 py-3 space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Now playing</p>
-                <p className="text-sm font-medium truncate">
-                  {audio.currentAyah ? `${audio.currentAyah.surahNameEnglish ?? "Surah"} · Ayah ${audio.currentAyah.ayahNumber}` : "—"}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => audio.playPage(ayahs)}
-                  className="hidden sm:inline-flex"
-                >
-                  <Volume2 className="h-4 w-4 mr-2" />
-                  Play page
-                </Button>
-                <Select value={audio.reciterId} onValueChange={audio.setReciterId}>
-                  <SelectTrigger className="h-9 w-[170px]"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {audio.RECITERS.map((r) => (
-                      <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+      {/* Keep the player mounted so audio continues when chrome is visually hidden. */}
+      <div
+        className="reader-player reader-chrome fixed left-0 right-0 z-30 border-t bg-background/95 backdrop-blur"
+        data-visible={showChrome ? "true" : "false"}
+        aria-hidden={!showChrome}
+      >
+        <div className="mx-auto max-w-lg px-4 py-3 space-y-2" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Now playing</p>
+              <p className="text-sm font-medium truncate">
+                {audio.currentAyah ? `${audio.currentAyah.surahNameEnglish ?? "Surah"} · Ayah ${audio.currentAyah.ayahNumber}` : "—"}
+              </p>
             </div>
-
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" onClick={audio.prev} aria-label="Previous ayah">
-                <SkipBack className="h-5 w-5" />
-              </Button>
+            <div className="flex flex-wrap items-center gap-2">
               <Button
-                size="icon"
-                onClick={() => {
-                  if (!audio.currentAyah) audio.playPage(ayahs);
-                  else audio.toggle();
-                }}
-                aria-label={audio.isPlaying ? "Pause" : "Play"}
+                variant="outline"
+                size="sm"
+                onClick={() => audio.playPage(ayahs)}
+                className="hidden sm:inline-flex"
               >
-                {audio.isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-              </Button>
-              <Button variant="outline" size="icon" onClick={audio.next} aria-label="Next ayah">
-                <SkipForward className="h-5 w-5" />
-              </Button>
-
-              <div className="min-w-0 flex-1">
-                <input
-                  type="range"
-                  min={0}
-                  max={Math.max(1, audio.duration || 1)}
-                  value={Math.min(audio.currentTime, audio.duration || 0)}
-                  onChange={(e) => audio.seek(parseFloat(e.target.value))}
-                  aria-label="Seek audio position"
-                  title="Seek audio position"
-                  className="w-full accent-[hsl(var(--primary))]"
-                />
-                <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
-                  <span>{audio.formattedTime}</span>
-                  <span>{audio.formattedDuration}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <Button variant="ghost" size="sm" onClick={() => audio.playPage(ayahs)} className="sm:hidden">
                 <Volume2 className="h-4 w-4 mr-2" />
                 Play page
               </Button>
-              <div className="min-w-0 text-[11px] text-muted-foreground">
-                Tap any ayah to play it. Page playback plays ayahs in order.
+              <Select value={audio.reciterId} onValueChange={audio.setReciterId}>
+                <SelectTrigger className="h-9 w-[170px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {audio.RECITERS.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="icon" onClick={audio.prev} aria-label="Previous ayah">
+              <SkipBack className="h-5 w-5" />
+            </Button>
+            <Button
+              size="icon"
+              onClick={() => {
+                if (!audio.currentAyah) audio.playPage(ayahs);
+                else audio.toggle();
+                revealChrome();
+              }}
+              aria-label={audio.isPlaying ? "Pause" : "Play"}
+            >
+              {audio.isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            </Button>
+            <Button variant="outline" size="icon" onClick={audio.next} aria-label="Next ayah">
+              <SkipForward className="h-5 w-5" />
+            </Button>
+
+            <div className="min-w-0 flex-1">
+              <input
+                type="range"
+                min={0}
+                max={Math.max(1, audio.duration || 1)}
+                value={Math.min(audio.currentTime, audio.duration || 0)}
+                onChange={(e) => audio.seek(parseFloat(e.target.value))}
+                aria-label="Seek audio position"
+                title="Seek audio position"
+                className="w-full accent-[hsl(var(--primary))]"
+              />
+              <div className="mt-1 flex items-center justify-between text-[11px] text-muted-foreground tabular-nums">
+                <span>{audio.formattedTime}</span>
+                <span>{audio.formattedDuration}</span>
               </div>
             </div>
           </div>
-        </div>
-      )}
 
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="ghost" size="sm" onClick={() => audio.playPage(ayahs)} className="sm:hidden">
+              <Volume2 className="h-4 w-4 mr-2" />
+              Play page
+            </Button>
+            <p className="min-w-0 flex-1 text-[11px] text-muted-foreground">
+              {immersive ? "Tap empty space to hide controls. Audio keeps playing." : "Tap any ayah to play it."}
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

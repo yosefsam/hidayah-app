@@ -115,7 +115,7 @@ export const useAppStore = create<AppState>()(
           const b: Bookmark = { id: `bm-${Date.now()}`, userId: "user-1", page, createdAt: new Date().toISOString() };
           return { bookmarks: [b, ...s.bookmarks] };
         }),
-      readerPreferences: { focusMode: false, showTranslation: false, translationKey: "sahih", fontScale: 1 },
+      readerPreferences: { focusMode: true, showTranslation: false, translationKey: "sahih", fontScale: 1 },
       setReaderPreferences: (p) => set((s) => ({ readerPreferences: { ...s.readerPreferences, ...p } })),
 
       visitedPages: [],
