@@ -16,7 +16,7 @@ export function AppHeader() {
   const showGreeting = Boolean(authDisplayName && !isDemo);
 
   return (
-    <header className="app-header sticky top-0 z-30 border-b border-border/80 bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75">
+    <header className="app-header sticky top-0 z-30 border-b border-border/80 bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75 md:block">
       <div className="mx-auto flex h-14 max-w-lg items-center justify-between gap-2 px-4 md:mx-auto md:max-w-4xl">
         <Logo size="sm" tone="auto" collapseWordmarkOnMobile />
         <div className="flex min-w-0 flex-1 items-center justify-end gap-3 md:gap-4">

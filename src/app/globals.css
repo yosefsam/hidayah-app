@@ -4,26 +4,27 @@
 
 @layer base {
   :root {
-    --background: 40 33% 98%;
-    --foreground: 24 10% 12%;
-    --card: 0 0% 100%;
-    --card-foreground: 24 10% 12%;
-    --primary: 160 84% 39%;
+    /* Soft warm white — high-contrast Arabic-friendly light mode */
+    --background: 40 40% 99%;
+    --foreground: 24 16% 10%;
+    --card: 40 30% 100%;
+    --card-foreground: 24 16% 10%;
+    --primary: 160 84% 36%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 40 20% 94%;
-    --secondary-foreground: 24 10% 12%;
-    --muted: 40 15% 94%;
-    --muted-foreground: 24 8% 42%;
-    --accent: 160 40% 94%;
-    --accent-foreground: 160 60% 25%;
+    --secondary: 40 22% 95%;
+    --secondary-foreground: 24 16% 10%;
+    --muted: 40 18% 95%;
+    --muted-foreground: 24 10% 38%;
+    --accent: 160 35% 94%;
+    --accent-foreground: 160 60% 22%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 40 14% 90%;
-    --input: 40 14% 90%;
-    --ring: 160 84% 39%;
+    --border: 40 16% 88%;
+    --input: 40 16% 88%;
+    --ring: 160 84% 36%;
     --radius: 0.75rem;
     --popover: 0 0% 100%;
-    --popover-foreground: 24 10% 12%;
+    --popover-foreground: 24 16% 10%;
   }
   .dark {
     --background: 24 10% 8%;
@@ -57,6 +58,9 @@ html { scroll-behavior: smooth; }
 
 .font-arabic {
   font-family: var(--font-arabic), ui-serif, serif;
+  /* Keep diacritics crisp in both themes */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 /* iPhone browser chrome, home indicator, and narrow layouts. */
@@ -83,4 +87,32 @@ body { min-width: 0; overflow-wrap: break-word; }
 .app-header, .landing-nav, .app-bottom-nav, .reader-player {
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Immersive Quran reading: hide app chrome; reader owns the viewport. */
+html.reader-immersive .app-header,
+html.reader-immersive .app-bottom-nav,
+html.reader-immersive .demo-banner {
+  display: none !important;
+}
+html.reader-immersive .app-shell {
+  padding-bottom: 0;
+}
+html.reader-immersive .reader-toolbar {
+  top: env(safe-area-inset-top, 0px);
+}
+html.reader-immersive .reader-player {
+  bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.reader-chrome {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.reader-chrome[data-visible="false"] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+}
+.reader-chrome.reader-player[data-visible="false"] {
+  transform: translateY(8px);
 }

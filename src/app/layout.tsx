@@ -12,6 +12,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  colorScheme: "light dark",
 };
 
 export const metadata: Metadata = {
@@ -27,9 +28,15 @@ export const metadata: Metadata = {
   },
 };
 
+/** Runs before paint to prevent light/dark flash. Reads zustand persist key `hidayah-app`. */
+const themeInitScript = `(function(){try{var raw=localStorage.getItem("hidayah-app");var theme="system";if(raw){var parsed=JSON.parse(raw);if(parsed&&parsed.state&&(parsed.state.theme==="light"||parsed.state.theme==="dark"||parsed.state.theme==="system"))theme=parsed.state.theme;}var dark=theme==="dark"||(theme==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);var root=document.documentElement;root.classList.toggle("dark",dark);root.style.colorScheme=dark?"dark":"light";}catch(e){}})();`;
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className={`${inter.variable} ${notoNaskhArabic.variable} font-sans antialiased`}>
         <AppProviders>{children}</AppProviders>
       </body>
